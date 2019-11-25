@@ -25,10 +25,6 @@ const ROOM_TYPE = {
 const KEY_PASSWORD_ENCRYPTOR = "kHT0sVGIKKpnlJE5BNkINYtuf19u6+Kk811iMuWQ5tM";
 
 var reader  = new FileReader();
-reader.onload = function () {
-    var messages = this.result.split('\n');
-    console.log("MSG:"+messages)
-};
 
 function doXMLHTTPRequest(method, header, url, data, isMultipart= false) {
     return new Promise(function (resolve, reject) {
@@ -181,15 +177,21 @@ exports.taptalk = {
             webSocket.onclose = function () {
                 callback('Disconnecting from websocket', null);
             };
-            webSocket.onerror = function (evt) {
-                callback('Error while connecting to web socket', evt);
+            webSocket.onerror = function () {
+                callback(null, 'Error while connecting to web socket');
             }
             webSocket.onmessage = function (evt) {
-                callback('Catching new message', null);
-                reader.readAsText(evt.data);
+				let response;
+				reader.onload = function () {
+					var messages = this.result.split('\n');
+					response = JSON.parse(messages);
+					callback(response, null);
+				};
+				reader.readAsText(evt.data);
             };
         } else {
             alert("Your browser does not support WebSockets.");
+            callback(null, 'cannot connect to websocket');
         }
     },
 
@@ -328,78 +330,144 @@ exports.taptalk = {
         }
     }
 }
+
+exports.tapCoreRoomListManager = {
+    getUpdatedRoomList : (callback) => {
+          let url = `${baseApiUrl}/v1/chat/message/room_list_and_unread`;
+          let _this = this;
+          let user = this.taptalk.getTaptalkActiveUser().userID;
+
+          if(this.taptalk.isAuthenticated()) {
+              let userData = getLocalStorageObject('TapTalk.UserData');
+              authenticationHeader["Authorization"] = `Bearer ${userData.accessToken}`;
+
+              doXMLHTTPRequest('POST', authenticationHeader, url, "")
+              .then(function (response) {
+                if(response.error.code === "") {
+                    let roomList = [];
+                    let data = response.data.messages;
+
+                    for(let i in response.data.messages) {
+                        data[i]["unreadCount"] = 0;
+                        
+                        if(i > 0) {
+                            let isRoomExist = roomList.findIndex(value => value.room.roomID === data[i].room.roomID);
+                            
+                            if(isRoomExist === -1) {
+                                data[i].body = decryptKey(data[i].body, data[i].localID);
+
+                                if(data[i].data !== "") {
+                                    data[i].data = JSON.parse(decryptKey(data[i].data, data[i].localID));
+                                }
+
+                                //set unread count value from private chat
+                                if(!data[i].isRead && (user === data[i].recipientID) && (data[i].recipientID !== "0")) {
+                                    data[i]["unreadCount"] = 1;
+                                }
+
+                                //set unread count value from group chat if the latest chat was from other member
+                                if(!data[i].isRead && (data[i].recipientID === "0")) {
+                                    data[i]["unreadCount"] = 1;
+                                }
+
+                                //set unread count value to from group chat if the latest chat was from me
+                                if(!data[i].isRead && (data[i].recipientID === "0") && (user === data[i].user.userID)) {
+                                    data[i]["unreadCount"] = 0;
+                                }
+
+                                roomList.push(data[i]);
+                            }else {
+                                let dataUnreadBefore = roomList[isRoomExist]["unreadCount"];
+                                roomList[isRoomExist]["unreadCount"] = dataUnreadBefore + 1;
+                            }
+                        }else {
+                            data[i].body = decryptKey(data[i].body, data[i].localID);
+
+                            if(data[i].data !== "") {
+                                data[i].data = JSON.parse(decryptKey(data[i].data, data[i].localID));
+                            }
+                            
+                            //set unread count value from private chat
+                            if(!data[i].isRead && (user === data[i].recipientID)) {
+                                data[i]["unreadCount"] = 1;
+                            }
+
+                            //set unread count value from group chat if the latest chat was from other member
+                            if(!data[i].isRead && (data[i].recipientID === "0")) {
+                                data[i]["unreadCount"] = 1;
+                            }
+
+                            //set unread count value to from group chat if the latest chat was from me
+                            if(!data[i].isRead && (data[i].recipientID === "0") && (user === data[i].user.userID)) {
+                                data[i]["unreadCount"] = 0;
+                            }
+
+                            roomList.push(data[i])
+                        }
+                    }
+
+                    // callback(roomList, null)
+                    callback({roomList : roomList, messageList: data}, null)
+                }else {
+                          if(response.error.code === "40104") {
+                              _this.taptalk.refreshAccessToken(() => _this.tapCoreRoomListManager.getUpdatedRoomList(null))
+                          }else {
+                              callback(null, response.error);
+                          }
+                      }
+                  })
+                  .catch(function (err) {
+                      console.error('there was an error!', err);
+                      callback(null, err);
+                  });
+           }
+     },
+
+      getPersonalChatRoomById : (recipient, callback) => {
+          let userID = getLocalStorageObject('TapTalk.UserData').user.userID;
+          let roomID = `${userID < recipient.id ? userID+"-"+recipient.id : recipient.id+"-"+userID}`;
+          const RoomType = ROOM_TYPE.personal;
+          let personalChatRoom = {
+              roomID: roomID,
+              RoomName: recipient.name,
+              RoomType: RoomType,
+              RecipientImage: recipient.avatar,
+              roomColor: ""
+          };
+
+          return callback(personalChatRoom);
+      },
+
+      getUserByIdFromApi : (userId, callback) => {
+          let url = `${baseApiUrl}/v1/client/user/get_by_id`;
+          let _this = this;
+
+          if(this.taptalk.isAuthenticated()) {
+              let userData = getLocalStorageObject('TapTalk.UserData');
+              authenticationHeader["Authorization"] = `Bearer ${userData.accessToken}`;
+
+              doXMLHTTPRequest('POST', authenticationHeader, url, {id: userId})
+                  .then(function (response) {
+                      if(response.error.code === "") {
+                          callback(response.data, null);
+                      }else {
+                          if(response.error.code === "40104") {
+                              _this.taptalk.refreshAccessToken(() => _this.tapCoreRoomListManager.getUserByIdFromApi(userId, null))
+                          }else {
+                              callback(null, response.error);
+                          }
+                      }
+                  })
+                  .catch(function (err) {
+                      console.error('there was an error!', err);
+                      callback(null, err);
+                  });
+          }
+      }
+}
 //   class TapTalkWebRoomListManager extends TapTalkWebAuthentication {
 //       constructor(props) {
 //           super(props);
-//       }
-
-//       getUpdatedRoomList(callback) {
-//           let url = `${baseApiUrl}/v1/chat/message/room_list_and_unread`;
-//           let _this = this;
-
-//           if(this.isAuthenticated()) {
-//               let userData = getLocalStorageObject('TapTalk.UserData');
-//               authenticationHeader["Authorization"] = `Bearer ${userData.accessToken}`;
-
-//               doXMLHTTPRequest('POST', authenticationHeader, url, "")
-//                   .then(function (response) {
-//                       if(response.error.code === "") {
-//                           callback(response.data, null);
-//                       }else {
-//                           if(response.error.code === "40104") {
-//                               _this.refreshAccessToken(() => _this.getUpdatedRoomList(null))
-//                           }else {
-//                               callback(null, response.error);
-//                           }
-//                       }
-//                   })
-//                   .catch(function (err) {
-//                       console.error('there was an error!', err);
-//                       callback(null, err);
-//                   });
-//           }
-//       }
-
-//       getPersonalChatRoomById(recipient, callback) {
-//           let userID = getLocalStorageObject('TapTalk.UserData').user.userID;
-//           let roomID = `${userID < recipient.id ? userID+"-"+recipient.id : recipient.id+"-"+userID}`;
-//           const RoomType = ROOM_TYPE.personal;
-//           let personalChatRoom = {
-//               roomID: roomID,
-//               RoomName: recipient.name,
-//               RoomType: RoomType,
-//               RecipientImage: recipient.avatar,
-//               roomColor: ""
-//           };
-
-//           return callback(personalChatRoom);
-//       }
-
-//       getUserByIdFromApi(userId, callback) {
-//           let url = `${baseApiUrl}/v1/client/user/get_by_id`;
-//           let _this = this;
-
-//           if(this.isAuthenticated()) {
-//               let userData = getLocalStorageObject('TapTalk.UserData');
-//               authenticationHeader["Authorization"] = `Bearer ${userData.accessToken}`;
-
-//               doXMLHTTPRequest('POST', authenticationHeader, url, {id: userId})
-//                   .then(function (response) {
-//                       if(response.error.code === "") {
-//                           callback(response.data, null);
-//                       }else {
-//                           if(response.error.code === "40104") {
-//                               _this.refreshAccessToken(() => _this.getUserByIdFromApi(userId, null))
-//                           }else {
-//                               callback(null, response.error);
-//                           }
-//                       }
-//                   })
-//                   .catch(function (err) {
-//                       console.error('there was an error!', err);
-//                       callback(null, err);
-//                   });
-//           }
 //       }
 //   }
 
