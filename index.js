@@ -385,7 +385,7 @@ exports.tapCoreRoomListManager = {
                             }else {
                                 let dataUnreadBefore = roomList[isRoomExist]["unreadCount"];
 
-                                if(data[i].user.userID !== user) {
+                                if(!data[i].isRead && data[i].user.userID !== user) {
                                     roomList[isRoomExist]["unreadCount"] = dataUnreadBefore + 1;
                                 }
                             }
