@@ -365,6 +365,11 @@ exports.tapCoreRoomListManager = {
                                     data[i]["unreadCount"] = 1;
                                 }
 
+                                //set unread count value from private chat
+                                if(!data[i].isRead && (user !== data[i].recipientID) && (data[i].recipientID !== "0")) {
+                                    data[i]["unreadCount"] = 0;
+                                }
+
                                 //set unread count value from group chat if the latest chat was from other member
                                 if(!data[i].isRead && (data[i].recipientID === "0")) {
                                     data[i]["unreadCount"] = 1;
@@ -390,6 +395,11 @@ exports.tapCoreRoomListManager = {
                             //set unread count value from private chat
                             if(!data[i].isRead && (user === data[i].recipientID)) {
                                 data[i]["unreadCount"] = 1;
+                            }
+
+                            //set unread count value from private chat
+                            if(!data[i].isRead && (user !== data[i].recipientID)) {
+                                data[i]["unreadCount"] = 0;
                             }
 
                             //set unread count value from group chat if the latest chat was from other member
