@@ -36,8 +36,7 @@ const SOCKET_DELETE_MESSAGE = "chat/deleteMessage";
 const SOCKET_OPEN_MESSAGE = "chat/openMessage";
 const SOCKET_AUTHENTICATION = "user/authentication";
 const SOCKET_USER_ONLINE_STATUS = "user/status";
-const SOCKET_USER_UPDATED = "user/updated";
-const USER = this.taptalk.getTaptalkActiveUser();       
+const SOCKET_USER_UPDATED = "user/updated";     
 const CHAT_MESSAGE_TYPE_TEXT = 1001;
 const CHAT_MESSAGE_TYPE_IMAGE = 1002;
 const CHAT_MESSAGE_TYPE_VIDEO = 1003;
@@ -430,23 +429,22 @@ exports.tapCoreRoomListManager = {
               .then(function (response) {
                 if(response.error.code === "") {
                     let roomList = [];
-                    let allLatestMessage = response.data.messages;
-                    let data = response.data.messages;
+                    let data = response.data.messages.slice();
 
-                    for(let i in response.data.messages) {							
-                        let isRoomExist = roomList.findIndex(value => value.room.roomID === data[i].room.roomID);
+                    for(let i in data) {							
+                        let isRoomExist = roomList.findIndex(value => value.latestChat.room.roomID === data[i].room.roomID);
 
                         if(isRoomExist === -1) {
                             let latestRoomListIndex = roomList.length;
 
-                            roomList.push(data[i]);
+                            roomList.push({ latestChat: data[i], allLatest: [data[i]] });
 
-                            roomList[latestRoomListIndex]["unreadCount"] = 0;
+                            roomList[latestRoomListIndex]['latestChat']["unreadCount"] = 0;
 
-                            roomList[latestRoomListIndex].body = decryptKey(data[i].body, data[i].localID);
+                            roomList[latestRoomListIndex].latestChat.body = decryptKey(data[i].body, data[i].localID);
 
-                            if(roomList[latestRoomListIndex].data !== "") {
-                                roomList[latestRoomListIndex].data = JSON.parse(decryptKey(data[i].data, data[i].localID));
+                            if(roomList[latestRoomListIndex].latestChat.data !== "") {
+                                roomList[latestRoomListIndex].latestChat.data = JSON.parse(decryptKey(data[i].data, data[i].localID));
                             }
 
                             //set unread count value from private chat if it wasn't from me
@@ -455,44 +453,45 @@ exports.tapCoreRoomListManager = {
                             // }
 
                             //set unread count value from private chat if it was from me
-                            if(!roomList[latestRoomListIndex].isRead && (user !== roomList[latestRoomListIndex].recipientID)) {
-                                roomList[latestRoomListIndex]["unreadCount"] = 0;
+                            if(!roomList[latestRoomListIndex]['latestChat'].isRead && (user !== roomList[latestRoomListIndex]['latestChat'].recipientID)) {
+                                roomList[latestRoomListIndex]['latestChat']["unreadCount"] = 0;
                             }
 
                             //set unread count value from group chat if the latest chat was from other member
-                            if(!roomList[latestRoomListIndex].isRead && (roomList[latestRoomListIndex].recipientID === "0")) {
-                                roomList[latestRoomListIndex]["unreadCount"] = 1;
+                            if(!roomList[latestRoomListIndex]['latestChat'].isRead && (roomList[latestRoomListIndex]['latestChat'].recipientID === "0")) {
+                                roomList[latestRoomListIndex]['latestChat']["unreadCount"] = 1;
                             }
 
                             //set unread count value to from group chat if the latest chat was from me
-                            if(!roomList[latestRoomListIndex].isRead && (roomList[latestRoomListIndex].recipientID === "0") && (user === roomList[latestRoomListIndex].user.userID)) {
-                                roomList[latestRoomListIndex]["unreadCount"] = 0;
+                            if(!roomList[latestRoomListIndex]['latestChat'].isRead && (roomList[latestRoomListIndex]['latestChat'].recipientID === "0") && (user === roomList[latestRoomListIndex].latestChat.user.userID)) {
+                                roomList[latestRoomListIndex]['latestChat']["unreadCount"] = 0;
                             }
 
                             // roomList.push(data[i]);
                         }else {
-                            let dataUnreadBefore = roomList[isRoomExist]["unreadCount"];
+                            roomList[isRoomExist]['allLatest'].push(data[i]);
+                            let dataUnreadBefore = roomList[isRoomExist]['latestChat']["unreadCount"];
 
-                            if((!roomList[isRoomExist].isRead) && (roomList[isRoomExist].user.userID !== user)) {
-                                roomList[isRoomExist]["unreadCount"] = dataUnreadBefore + 1;
+                            if((!roomList[isRoomExist]['latestChat'].isRead) && (roomList[isRoomExist].latestChat.user.userID !== user)) {
+                                roomList[isRoomExist]['latestChat']["unreadCount"] = dataUnreadBefore + 1;
                             }
                         }
                     }
 
-                    callback({allLatestMessageGroup : roomList, allLatestMesaasdsage: allLatestMessage}, null)
+                    callback({allLatestMessageGroup : roomList}, null);
                 }else {
-                          if(response.error.code === "40104") {
-                              _this.taptalk.refreshAccessToken(() => _this.tapCoreRoomListManager.getUpdatedRoomList(null))
-                          }else {
-                              callback(null, response.error);
-                          }
-                      }
-                  })
-                  .catch(function (err) {
-                      console.error('there was an error!', err);
-                      callback(null, err);
-                  });
-           }
+                    if(response.error.code === "40104") {
+                        _this.refreshAccessToken(() => _this.getUpdatedRoomList(null))
+                    }else {
+                        callback(null, response.error);
+                    }
+                }
+            })
+            .catch(function (err) {
+                console.error('there was an error!', err);
+                callback(null, err);
+            });
+        }
      },
 
       getPersonalChatRoomById : (recipient, callback) => {
@@ -537,6 +536,8 @@ exports.tapCoreRoomListManager = {
           }
       }
 }
+
+const USER = this.taptalk.getTaptalkActiveUser();  
 
 exports.tapCoreChatRoomManager = {
     sendStartTypingEmit : (roomID) => {
