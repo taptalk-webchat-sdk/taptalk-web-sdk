@@ -15,15 +15,15 @@ window.indexedDB = window.indexedDB || window.mozIndexedDB || window.webkitIndex
 
 //initiate index db for local file(image, video, file)
 function addFileToDB(fileID, base64, fileType) {
-	var tx = db.transaction(['files'], 'readwrite');
+	let tx = db.transaction(['files'], 'readwrite');
 	
-	var store = tx.objectStore('files');
+	let store = tx.objectStore('files');
 
 	var objectStoreRequest = store.get(fileID);
 	
 	objectStoreRequest.onsuccess = function(event) {
 		if(!objectStoreRequest.result) {
-			var file = {file: base64, type: fileType, timestamp: DATE_NOW};
+			let file = {file: base64, type: fileType, timestamp: DATE_NOW};
 
 			store.add(file, fileID)
 		}
@@ -39,12 +39,12 @@ function addFileToDB(fileID, base64, fileType) {
 }
 
 function deleteExpiredFileKey() {
-	var tx = db.transaction(['files'], 'readwrite');
+	let tx = db.transaction(['files'], 'readwrite');
 	
-	var store = tx.objectStore('files');
+	let store = tx.objectStore('files');
 	
 	if(expiredKey.length > 0) {
-		for(var i in expiredKey) {
+		for(let i in expiredKey) {
 			store.delete(expiredKey[i])
 		}
 	}
@@ -59,15 +59,15 @@ function deleteExpiredFileKey() {
 
 	dbTapTalk.onupgradeneeded = function(event) {
 		db = event.target.result;
-		var notes = db.createObjectStore('files');
+		let notes = db.createObjectStore('files');
 	}
 
 	dbTapTalk.onsuccess = function(event) {
         db = event.target.result;
 
-        var tx = db.transaction(['files'], 'readwrite');
+        let tx = db.transaction(['files'], 'readwrite');
 
-        var store = tx.objectStore('files');
+        let store = tx.objectStore('files');
 
         var objectStoreRequest = store.getAll();
 
@@ -75,14 +75,14 @@ function deleteExpiredFileKey() {
 
         objectStoreRequest.onsuccess = function(event) {
             if(!objectStoreRequest.result) {
-                var file = {file: base64, type: fileType, timestamp: DATE_NOW};
+                let file = {file: base64, type: fileType, timestamp: DATE_NOW};
 
                 store.add(file, fileID)
             }
         };
         
         objectKeyRequest.onsuccess = function(event) {
-            for(var i in objectKeyRequest.result) {
+            for(let i in objectKeyRequest.result) {
                 module.exports.tapCoreChatRoomManager.getFileFromDB(objectKeyRequest.result[i], function(data) {
                     //two weeks from now will be deleted
                     if((DATE_NOW-data.timestamp) > 1576155138) {
@@ -125,11 +125,11 @@ const ROOM_TYPE = {
 const KEY_PASSWORD_ENCRYPTOR = "kHT0sVGIKKpnlJE5BNkINYtuf19u6+Kk811iMuWQ5tM";
 
 function getDeviceID() {
-	var localDeviceID = localStorage.getItem('tapTalk.DeviceID');
+	let localDeviceID = localStorage.getItem('tapTalk.DeviceID');
 
-	var md5DeviceID = md5(navigator.userAgent + "@" + DATE_NOW);
+	let md5DeviceID = md5(navigator.userAgent + "@" + DATE_NOW);
 
-	var generateDeviceID = md5DeviceID.substring(0, 16) + "-" + guid();
+	let generateDeviceID = md5DeviceID.substring(0, 16) + "-" + guid();
 
 	if(localDeviceID !== null) {
 		return localDeviceID;
@@ -228,11 +228,11 @@ const MESSAGE_MODEL = {
 
 function doXMLHTTPRequest(method, header, url, data, isMultipart= false) {
     return new Promise(function (resolve, reject) {
-        var xhr = new XMLHttpRequest();
+        let xhr = new XMLHttpRequest();
 
         xhr.open(method, url, true);
 
-        for(var headerVal in header) {
+        for(let headerVal in header) {
             xhr.setRequestHeader(headerVal, header[headerVal]);        
         }
 
@@ -259,7 +259,7 @@ function doXMLHTTPRequest(method, header, url, data, isMultipart= false) {
 }
 
 function doXMLHTTPRequestToBase64(method, header, url, data, message, onProgress) {
-    var sendProgressDownload = (oEvent) => {
+    let sendProgressDownload = (oEvent) => {
 		if (oEvent.lengthComputable) {
 		  var percentComplete = oEvent.loaded / oEvent.total * 100;
 		  onProgress(message, Math.round(percentComplete * 10) / 10, oEvent.loaded);
@@ -267,13 +267,13 @@ function doXMLHTTPRequestToBase64(method, header, url, data, message, onProgress
 	}
 
     return new Promise(function (resolve, reject) {
-		var xhrBase64 = new XMLHttpRequest();
+		let xhrBase64 = new XMLHttpRequest();
 		
 		xhrBase64.addEventListener("progress", sendProgressDownload);
 
         xhrBase64.open(method, url, true);
 
-        for(var headerVal in header) {
+        for(let headerVal in header) {
             xhrBase64.setRequestHeader(headerVal, header[headerVal]);        
 		}
 		
@@ -283,18 +283,18 @@ function doXMLHTTPRequestToBase64(method, header, url, data, message, onProgress
         
         xhrBase64.onload = function() {
 			if (xhrBase64.status === 200) {
-				var convertToBase64 = () => {
-					var uInt8Array = new Uint8Array(xhrBase64.response);
-					var i = uInt8Array.length;
-					var binaryString = new Array(i);
+				let convertToBase64 = () => {
+					let uInt8Array = new Uint8Array(xhrBase64.response);
+					let i = uInt8Array.length;
+					let binaryString = new Array(i);
 
 					while (i--) {
 						binaryString[i] = String.fromCharCode(uInt8Array[i]);
 					}
 
-					var data = binaryString.join('');
+					let data = binaryString.join('');
 
-					var base64 = window.btoa(data);
+					let base64 = window.btoa(data);
 
 					return base64;
 				};
@@ -326,7 +326,7 @@ function doXMLHTTPRequestToBase64(method, header, url, data, message, onProgress
 }
 
 function doXMLHTTPRequestUpload(method, header, url, data, onProgress) {
-	var sendProgressUpload = (oEvent) => {
+	let sendProgressUpload = (oEvent) => {
 		if (oEvent.lengthComputable) {
 		  var percentComplete = oEvent.loaded / oEvent.total * 100;
 		  onProgress(Math.round(percentComplete * 10) / 10, oEvent.loaded);
@@ -334,11 +334,11 @@ function doXMLHTTPRequestUpload(method, header, url, data, onProgress) {
 	}
 
     return new Promise(function (resolve, reject) {
-        var xhrUpload = new XMLHttpRequest();
+        let xhrUpload = new XMLHttpRequest();
 
         xhrUpload.open(method, url, true);
 
-        for(var headerVal in header) {
+        for(let headerVal in header) {
             xhrUpload.setRequestHeader(headerVal, header[headerVal]);        
 		}
 		
@@ -371,7 +371,7 @@ function getLocalStorageObject(storage) {
 }
 
 function generateHeaderQuerystring() {
-    var keys = {
+    let keys = {
         "content_type": authenticationHeader["Content-Type"],
         "app_key": authenticationHeader["App-Key"],
         "authorization": `Bearer ${getLocalStorageObject('TapTalk.UserData').accessToken}`,
@@ -389,7 +389,7 @@ function generateHeaderQuerystring() {
 }
 
 function setUserDataStorage(response) {
-    var data = response;
+    let data = response;
     data.logout = false;
     return localStorage.setItem('TapTalk.UserData', encryptKey(JSON.stringify(data), KEY_PASSWORD_ENCRYPTOR));
 }
@@ -405,9 +405,9 @@ function guid() {
 }
 
 function isFileAllowed(fileType, file) {
-    var fileTypeAllowed = false;
+    let fileTypeAllowed = false;
     
-    for (var type in fileType) {
+    for (let type in fileType) {
         if(fileType[type] === file) {
             fileTypeAllowed = true;
         }
@@ -420,38 +420,38 @@ var tapReader = new FileReader();
 
 tapReader.onload = function () {
 	var messages = this.result.split('\n');
-	for (var i in messages) {
+	for (let i in messages) {
       var m = JSON.parse(messages[i]);
       
       handleEmit(m);
 	 
       switch(m.eventName) {
         case "chat/sendMessage":
-            for(var i in tapMessageListeners) {
+            for(let i in tapMessageListeners) {
                 tapMessageListeners[i].onReceiveNewMessage(m.data);
             }
             break;
 
         case "chat/updateMessage":
-            for(var i in tapMessageListeners) {
+            for(let i in tapMessageListeners) {
                 tapMessageListeners[i].onReceiveUpdateMessage(m.data);
             }
             break;
 
         case "chat/startTyping":
-            for(var i in tapRoomStatusListeners) {
+            for(let i in tapRoomStatusListeners) {
                 tapRoomStatusListeners[i].onReceiveStartTyping(m.data.roomID, m.data.user);
             }
             break;
 
         case "chat/stopTyping":
-            for(var i in tapRoomStatusListeners) {
+            for(let i in tapRoomStatusListeners) {
                 tapRoomStatusListeners[i].onReceiveStopTyping(m.data.roomID, m.data.user);
             }
             break;
 
         case "user/status":
-            for(var i in tapRoomStatusListeners) {
+            for(let i in tapRoomStatusListeners) {
                 tapRoomStatusListeners[i].onReceiveOnlineStatus(m.data.user, m.data.isOnline, m.data.lastActive);
             }
             break;
@@ -474,14 +474,14 @@ function handleEmit(emit) {
 }
 
 var handleNewMessage = (message) => {
-    var _this = this;
-    var user = this.taptalk.getTaptalkActiveUser();
+    let _this = this;
+    let user = this.taptalk.getTaptalkActiveUser();
 
-    var removeRoom = (roomID) => {
+    let removeRoom = (roomID) => {
 		delete tapTalkRooms[roomID];
 	}
     
-    var mergeTaptalkRooms = (obj, src) => {
+    let mergeTaptalkRooms = (obj, src) => {
 		for (var key in src) {
 			if (src.hasOwnProperty(key)) obj[key] = src[key];
 		}
@@ -502,15 +502,15 @@ var handleNewMessage = (message) => {
 		message.quote.content = decryptKey(message.quote.content, message.localID);
 	}
 
-	var isRoomExist = tapTalkRooms[message.room.roomID];
+	let isRoomExist = tapTalkRooms[message.room.roomID];
 	
 	if(isRoomExist) {
-		var isLocalIDExist = tapTalkRooms[message.room.roomID].messages.findIndex(value => value.localID === message.localID);
+		let isLocalIDExist = tapTalkRooms[message.room.roomID].messages.findIndex(value => value.localID === message.localID);
 
 		if(isLocalIDExist === -1) {
 			tapTalkRooms[message.room.roomID].messages.unshift(message);
 
-            var currentIndex = tapTalkRooms[message.room.roomID];
+            let currentIndex = tapTalkRooms[message.room.roomID];
             
 			delete tapTalkRooms[message.room.roomID];
 
@@ -518,9 +518,9 @@ var handleNewMessage = (message) => {
             tapTalkRooms = Object.assign({[message.room.roomID] : currentIndex}, tapTalkRooms);
 		}
 	}else {
-		var roomID = message.room.roomID;
+		let roomID = message.room.roomID;
 
-		var newRoom = {
+		let newRoom = {
 			[roomID]: {
 				messages: [],
 				hasMore: true,
@@ -554,11 +554,11 @@ var handleUpdateMessage = (message) => {
 		message.quote.content = decryptKey(message.quote.content, message.localID);
 	}
 
-	var findMessageIndex = tapTalkRooms[message.room.roomID].messages.findIndex(value => value.localID === message.localID);
+	let findMessageIndex = tapTalkRooms[message.room.roomID].messages.findIndex(value => value.localID === message.localID);
 	tapTalkRooms[message.room.roomID].messages[findMessageIndex] = message;
 	
 	if(message.isRead) {
-		for(var i in tapTalkRooms[message.room.roomID].messages) {
+		for(let i in tapTalkRooms[message.room.roomID].messages) {
 			tapTalkRooms[message.room.roomID].messages[i].isRead = true;
 		}
 	}	
@@ -606,28 +606,28 @@ tapMsgQueue.setCallback((emit) => {
 });
 
 //image compress
-var compressImageFile = (file, widthVal, heightVal) => {
+let compressImageFile = (file, widthVal, heightVal) => {
     return new Promise(function (resolve, reject) {;
-        var fileName = file.name;
-        var reader = new FileReader();
-        var readerCanvasImage = new FileReader();
+        let fileName = file.name;
+        let reader = new FileReader();
+        let readerCanvasImage = new FileReader();
 
         reader.readAsDataURL(file);
 
         reader.onload = event => {
-            var img = new Image();
+            let img = new Image();
             img.src = event.target.result;
 
             img.onload = () => {
-                    var elem = document.createElement('canvas');
+                    let elem = document.createElement('canvas');
                     elem.width = widthVal;
                     elem.height = heightVal;
-                    var ctx = elem.getContext('2d');
+                    let ctx = elem.getContext('2d');
 
                     ctx.drawImage(img, 0, 0, widthVal, heightVal);
 
                     ctx.canvas.toBlob((blob) => {
-                        var newFile = new File([blob], fileName, {
+                        let newFile = new File([blob], fileName, {
                             type: file.type,
                             lastModified: Date.now()
                         });
@@ -654,13 +654,29 @@ exports.taptalk = {
         this.taptalk.refreshProjectConfigs();
     },
 
+    getDeviceID : () => {
+        let localDeviceID = localStorage.getItem('tapTalk.DeviceID');
+
+        let md5DeviceID = md5(navigator.userAgent + "@" + DATE_NOW);
+
+        let generateDeviceID = md5DeviceID.substring(0, 16) + "-" + guid();
+
+        if(localDeviceID !== null) {
+            return localDeviceID;
+        }
+
+        localStorage.setItem('tapTalk.DeviceID', generateDeviceID);
+
+        return generateDeviceID;
+    },
+
     addTapListener: (callback) => {
 		tapListener.push(callback);
     },
 
     authenticateWithAuthTicket : (authTicket, connectOnSuccess, callback) => {
-        var url = `${baseApiUrl}/v1/auth/access_token/request`;
-        var _this = this;
+        let url = `${baseApiUrl}/v1/auth/access_token/request`;
+        let _this = this;
 
         setTimeout(() => {
             authenticationHeader["Authorization"] = `Bearer ${authTicket}`;
@@ -687,16 +703,17 @@ exports.taptalk = {
     testAccessToken : (callback) => {
         authenticationHeader["Authorization"] = `Bearer ${getLocalStorageObject('TapTalk.UserData').accessToken}`;
         
-        var url = `${baseApiUrl}/connect?check=1`;
-        var _this = this;
+        let url = `${baseApiUrl}/connect?check=1`;
+        let _this = this;
 
         doXMLHTTPRequest('GET', authenticationHeader, url, "")
             .then(function (response) {
                 if(response.error.code === "") {
-                    _this.connect(callback);
+                    // _this.connect(callback);
+                    callback.onSuccess();
                 }else {
                     if(response.error.code === "40104") {
-                        _this.taptalk.refreshAccessToken(() => _this.taptalk.testAccessToken(null))
+                        _this.taptalk.refreshAccessToken(() => _this.taptalk.testAccessToken(callback))
                     }else {
                         callback.onError(response.error.code, response.error.message);
                     }
@@ -708,27 +725,34 @@ exports.taptalk = {
     },
 
     connect : (callback) => {
-        if (window["WebSocket"]) {
-            authenticationHeader["Authorization"] = `Bearer ${getLocalStorageObject('TapTalk.UserData').accessToken}`;
-            var url = `wss://${baseApiUrl.replace('https://', '')}/connect?${generateHeaderQuerystring()}`;
-            webSocket = new WebSocket(url);
-
-            webSocket.onopen = function () {
-                callback.onSuccess('Successfully connected to TapTalk.io server');  
+        this.taptalk.testAccessToken({
+            onSuccess: () => {
+                if (window["WebSocket"]) {
+                    authenticationHeader["Authorization"] = `Bearer ${getLocalStorageObject('TapTalk.UserData').accessToken}`;
+                    var url = `wss://${baseApiUrl.replace('https://', '')}/connect?${generateHeaderQuerystring()}`;
+                    webSocket = new WebSocket(url);
+        
+                    webSocket.onopen = function () {
+                        callback.onSuccess('Successfully connected to TapTalk.io server');  
+                    }
+                    webSocket.onclose = function () {
+                       // console.log('Disconnecting from websocket');
+                    };
+                    webSocket.onerror = function () {
+                        callback.onError('Error while connecting to web socket');
+                    }
+                    webSocket.onmessage = function (evt) {
+                        tapMsgQueue.addToQueue(evt.data);
+                    };
+                } else {
+                    alert("Your browser does not support WebSockets.");
+                    callback(null, 'cannot connect to websocket');
+                }
+            },
+            onError: (errorCode, errorMessage) => {
+                callback.onError((errorCode, errorMessage));
             }
-            webSocket.onclose = function () {
-               // console.log('Disconnecting from websocket');
-            };
-            webSocket.onerror = function () {
-                callback.onError('Error while connecting to web socket');
-            }
-            webSocket.onmessage = function (evt) {
-                tapMsgQueue.addToQueue(evt.data);
-            };
-        } else {
-            alert("Your browser does not support WebSockets.");
-            callback(null, 'cannot connect to websocket');
-        }
+        })
     },
 
     disconnect : () => {
@@ -741,7 +765,7 @@ exports.taptalk = {
 
     refreshAccessToken : (callback) => {
         if(this.taptalk.isAuthenticated()) {
-            var url = `${baseApiUrl}/v1/auth/access_token/refresh`;
+            let url = `${baseApiUrl}/v1/auth/access_token/refresh`;
 
             setTimeout(() => {
                 authenticationHeader["Authorization"] = `Bearer ${getLocalStorageObject('TapTalk.UserData').refreshToken}`;
@@ -753,7 +777,7 @@ exports.taptalk = {
 
                             callback();
                         }else {
-                            for(var i  in tapListener) {
+                            for(let i  in tapListener) {
 								Object.keys(tapListener[i]).map((callback) => {
 									if(callback === 'onTapTalkRefreshTokenExpired') {
 										tapListener[i][callback]();
@@ -781,8 +805,8 @@ exports.taptalk = {
     },
 
     logoutAndClearAllTapTalkData : (callback) => {
-        var url = `${baseApiUrl}/v1/client/logout`;
-        var _this = this;
+        let url = `${baseApiUrl}/v1/client/logout`;
+        let _this = this;
 
         if(this.taptalk.isAuthenticated() ) {
             authenticationHeader["Authorization"] = `Bearer ${getLocalStorageObject('TapTalk.UserData').accessToken}`;
@@ -813,7 +837,7 @@ exports.taptalk = {
     },
 
     refreshProjectConfigs : (callback) => {
-        var url = `${baseApiUrl}/v1/client/project_configs`;
+        let url = `${baseApiUrl}/v1/client/project_configs`;
 
         authenticationHeader["Authorization"] = "";
 
@@ -832,16 +856,16 @@ exports.taptalk = {
     },
 
     getTaptalkActiveUser : () => {
-        var userDataStorage = getLocalStorageObject('TapTalk.UserData');
+        let userDataStorage = getLocalStorageObject('TapTalk.UserData');
         return !userDataStorage ? null : userDataStorage.user;
     },
 
     refreshActiveUser : (callback) => {
-        var url = `${baseApiUrl}/v1/client/user/get_by_id`;
-        var _this = this;
+        let url = `${baseApiUrl}/v1/client/user/get_by_id`;
+        let _this = this;
 
         if(this.taptalk.isAuthenticated()) {
-            var userData = getLocalStorageObject('TapTalk.UserData');
+            let userData = getLocalStorageObject('TapTalk.UserData');
             authenticationHeader["Authorization"] = `Bearer ${userData.accessToken}`;
 
             doXMLHTTPRequest('POST', authenticationHeader, url, {id: userData.user.userID})
@@ -867,14 +891,14 @@ exports.taptalk = {
     },
 
     uploadUserPhoto: (file, callback) => {
-        var url = `${baseApiUrl}/v1/client/user/photo/upload`;
-        var _this = this;
+        let url = `${baseApiUrl}/v1/client/user/photo/upload`;
+        let _this = this;
 
         if(this.taptalk.isAuthenticated()) {
-            var userData = getLocalStorageObject('TapTalk.UserData');
+            let userData = getLocalStorageObject('TapTalk.UserData');
 			authenticationHeader["Authorization"] = `Bearer ${userData.accessToken}`;
 			
-			var uploadData = new FormData();
+			let uploadData = new FormData();
 
 			uploadData.append("file", file);
             
@@ -911,7 +935,7 @@ exports.taptalk = {
 			return 0;
 		}
 	
-		var index = ((name.charCodeAt(0)) + name.charCodeAt(name.length - 1) + name.length) % tapTalkRandomColors.length;
+		let index = ((name.charCodeAt(0)) + name.charCodeAt(name.length - 1) + name.length) % tapTalkRandomColors.length;
 	
 		return tapTalkRandomColors[index];
     },
@@ -925,10 +949,10 @@ exports.taptalk = {
 
 exports.tapCoreRoomListManager = {
     getRoomListFromCache : () => {
-        var arrayMessage = [];
+        let arrayMessage = [];
         
-		var setLastMessage = (message) => {
-			for(var i in message) {
+		let setLastMessage = (message) => {
+			for(let i in message) {
 				if(!message[i].isHidden) {
 					return message[i]
 				}
@@ -936,7 +960,7 @@ exports.tapCoreRoomListManager = {
 		};
 
 		Object.keys(tapTalkRooms).forEach((value) => {            
-            var unreadCount = this.tapCoreRoomListManager.getUnreadCountRoomList(tapTalkRooms[value].messages[0].room.roomID);
+            let unreadCount = this.tapCoreRoomListManager.getUnreadCountRoomList(tapTalkRooms[value].messages[0].room.roomID);
 
 			arrayMessage.push({
 				lastMessage: setLastMessage(tapTalkRooms[value].messages),
@@ -948,23 +972,23 @@ exports.tapCoreRoomListManager = {
     },
     
     getUpdatedRoomList : (callback) => {
-        var url = `${baseApiUrl}/v1/chat/message/room_list_and_unread`;
-		var _this = this;
-		var user = this.taptalk.getTaptalkActiveUser().userID;
+        let url = `${baseApiUrl}/v1/chat/message/room_list_and_unread`;
+		let _this = this;
+		let user = this.taptalk.getTaptalkActiveUser().userID;
 
         if(this.taptalk.isAuthenticated()) {
-            var userData = getLocalStorageObject('TapTalk.UserData');
+            let userData = getLocalStorageObject('TapTalk.UserData');
 			authenticationHeader["Authorization"] = `Bearer ${userData.accessToken}`;
 			
 			if(JSON.stringify(tapTalkRooms) === "{}") {
 				doXMLHTTPRequest('POST', authenticationHeader, url, "")
 					.then(function (response) {
 						if(response.error.code === "") {
-							var data = response.data.messages;
+							let data = response.data.messages;
 							
-							for(var i in data) {
-								var localID = data[i].localID;
-								var decryptedMessage = decryptKey(data[i].body, data[i].localID);
+							for(let i in data) {
+								let localID = data[i].localID;
+								let decryptedMessage = decryptKey(data[i].body, data[i].localID);
 
 								if(!tapTalkRooms[data[i].room.roomID]) { //if rooms not exist in rooms array
 									tapTalkRooms[data[i].room.roomID] = {};
@@ -972,33 +996,33 @@ exports.tapCoreRoomListManager = {
 									tapTalkRooms[data[i].room.roomID]["messages"] = [];
 									tapTalkRooms[data[i].room.roomID]["hasMore"] = true;
 		
-									var findLocalID = tapTalkRooms[data[i].room.roomID]["messages"].findIndex(value => value.localID === data[i].localID);
+									let findLocalID = tapTalkRooms[data[i].room.roomID]["messages"].findIndex(value => value.localID === data[i].localID);
 									
 									if(findLocalID === -1) {
 										tapTalkRooms[data[i].room.roomID]["messages"].push(data[i]);
 									}
 									
-									var findBodyIndex = tapTalkRooms[data[i].room.roomID]["messages"].findIndex(value => value.localID === localID);
+									let findBodyIndex = tapTalkRooms[data[i].room.roomID]["messages"].findIndex(value => value.localID === localID);
 
                                     tapTalkRooms[data[i].room.roomID]["messages"][findBodyIndex].body = decryptedMessage;
                                     
                                     if((tapTalkRooms[data[i].room.roomID]["messages"][findBodyIndex].data !== "") && !tapTalkRooms[data[i].room.roomID]["messages"][findBodyIndex].isDeleted) {
-										var messageIndex = tapTalkRooms[data[i].room.roomID]["messages"][findBodyIndex];
+										let messageIndex = tapTalkRooms[data[i].room.roomID]["messages"][findBodyIndex];
 										messageIndex.data = JSON.parse(decryptKey(messageIndex.data, messageIndex.localID));
 									}
 								}else {
-									var findLocalID = tapTalkRooms[data[i].room.roomID]["messages"].findIndex(value => value.localID === data[i].localID);
+									let findLocalID = tapTalkRooms[data[i].room.roomID]["messages"].findIndex(value => value.localID === data[i].localID);
 									
 									if(findLocalID === -1) {
 										tapTalkRooms[data[i].room.roomID]["messages"].push(data[i]);
 									}
 									
-									var findBodyIndex = tapTalkRooms[data[i].room.roomID]["messages"].findIndex(value => value.localID === localID);
+									let findBodyIndex = tapTalkRooms[data[i].room.roomID]["messages"].findIndex(value => value.localID === localID);
 
                                     tapTalkRooms[data[i].room.roomID]["messages"][findBodyIndex].body = decryptedMessage;
                                     
                                     if(tapTalkRooms[data[i].room.roomID]["messages"][findBodyIndex].data !== "") {
-										var messageIndex = tapTalkRooms[data[i].room.roomID]["messages"][findBodyIndex];
+										let messageIndex = tapTalkRooms[data[i].room.roomID]["messages"][findBodyIndex];
 										messageIndex.data = JSON.parse(decryptKey(messageIndex.data, messageIndex.localID));
 									}
 								}
@@ -1025,9 +1049,9 @@ exports.tapCoreRoomListManager = {
 
     getUnreadCountRoomList : (roomID) => {        
         if(tapTalkRooms[roomID]) {
-			var unreadCount = 0;
+			let unreadCount = 0;
 
-			for(var i in tapTalkRooms[roomID].messages) {
+			for(let i in tapTalkRooms[roomID].messages) {
 				if(!tapTalkRooms[roomID].messages[i].isRead && 
 				   !tapTalkRooms[roomID].messages[i].isDeleted && 
 				   !tapTalkRooms[roomID].messages[i].isHidden &&
@@ -1052,11 +1076,11 @@ exports.tapCoreRoomListManager = {
     },
 
     getUserByIdFromApi : (userId, callback) => {
-        var url = `${baseApiUrl}/v1/client/user/get_by_id`;
-        var _this = this;
+        let url = `${baseApiUrl}/v1/client/user/get_by_id`;
+        let _this = this;
 
         if(this.taptalk.isAuthenticated()) {
-            var userData = getLocalStorageObject('TapTalk.UserData');
+            let userData = getLocalStorageObject('TapTalk.UserData');
             authenticationHeader["Authorization"] = `Bearer ${userData.accessToken}`;
 
             doXMLHTTPRequest('POST', authenticationHeader, url, {id: userId})
@@ -1089,7 +1113,7 @@ exports.tapCoreRoomListManager = {
 
 exports.tapCoreChatRoomManager = {
     sendStartTypingEmit : (roomID) => {
-        var emitData = {
+        let emitData = {
             eventName: SOCKET_START_TYPING,
             data: {
                 roomID: roomID,
@@ -1101,7 +1125,7 @@ exports.tapCoreChatRoomManager = {
     },
 
     sendStopTypingEmit : (roomID) => {
-        var emitData = {
+        let emitData = {
             eventName: SOCKET_STOP_TYPING,
             data: {
                 roomID: roomID,
@@ -1121,16 +1145,16 @@ exports.tapCoreChatRoomManager = {
 	},
 
     createGroupChatRoom : (groupName, participantList, callback) => {
-        var url = `${baseApiUrl}/v1/client/room/create`;
-        var _this = this;
-        var data = {
+        let url = `${baseApiUrl}/v1/client/room/create`;
+        let _this = this;
+        let data = {
             name: groupName,
             type: 2,
             userIDs: participantList
         }
 
         if(this.taptalk.isAuthenticated()) {
-            var userData = getLocalStorageObject('TapTalk.UserData');
+            let userData = getLocalStorageObject('TapTalk.UserData');
             authenticationHeader["Authorization"] = `Bearer ${userData.accessToken}`;
 
             doXMLHTTPRequest('POST', authenticationHeader, url, data)
@@ -1154,17 +1178,17 @@ exports.tapCoreChatRoomManager = {
     },
 
     createGroupChatRoomWithPicture : (groupName, participantList, imageUri, callback) => {
-        var _this = this;
+        let _this = this;
         this.tapCoreChatRoomManager.createGroupChatRoom(groupName, participantList, {
             onSuccess: (room) => {
-                var url = `${baseApiUrl}/v1/client/room/photo/upload`;
-                var uploadData = new FormData();
+                let url = `${baseApiUrl}/v1/client/room/photo/upload`;
+                let uploadData = new FormData();
 
                 uploadData.append("roomID", room.roomID);
                 uploadData.append("file", imageUri);
                 
                 if(_this.taptalk.isAuthenticated()) {
-                    var userData = getLocalStorageObject('TapTalk.UserData');
+                    let userData = getLocalStorageObject('TapTalk.UserData');
                     authenticationHeader["Authorization"] = `Bearer ${userData.accessToken}`;
 
                     doXMLHTTPRequest('POST', authenticationHeader, url, uploadData, true)
@@ -1195,15 +1219,15 @@ exports.tapCoreChatRoomManager = {
     },
 
     updateGroupPicture : (groupId, imageUri, callback) => {
-        var _this = this;
-        var url = `${baseApiUrl}/v1/client/room/photo/upload`;
-        var uploadData = new FormData();
+        let _this = this;
+        let url = `${baseApiUrl}/v1/client/room/photo/upload`;
+        let uploadData = new FormData();
 
         uploadData.append("roomID", groupId);
         uploadData.append("file", imageUri);
         
         if(_this.taptalk.isAuthenticated()) {
-            var userData = getLocalStorageObject('TapTalk.UserData');
+            let userData = getLocalStorageObject('TapTalk.UserData');
             authenticationHeader["Authorization"] = `Bearer ${userData.accessToken}`;
 
             doXMLHTTPRequestUpload('POST', authenticationHeader, url, uploadData, callback.onProgress)
@@ -1225,11 +1249,11 @@ exports.tapCoreChatRoomManager = {
     },
 
     getGroupChatRoom : (groupId, callback) => {
-        var _this = this;
-        var url = `${baseApiUrl}/v1/client/room/get`;
+        let _this = this;
+        let url = `${baseApiUrl}/v1/client/room/get`;
         
         if(_this.taptalk.isAuthenticated()) {
-            var userData = getLocalStorageObject('TapTalk.UserData');
+            let userData = getLocalStorageObject('TapTalk.UserData');
             authenticationHeader["Authorization"] = `Bearer ${userData.accessToken}`;
 
             doXMLHTTPRequest('POST', authenticationHeader, url, {roomID: groupId})
@@ -1252,11 +1276,11 @@ exports.tapCoreChatRoomManager = {
     },
 
     getRoomByXcID : (xcRoomID, callback) => {
-		var _this = this;
-        var url = `${baseApiUrl}/v1/client/room/get_by_xc_room_id`;
+		let _this = this;
+        let url = `${baseApiUrl}/v1/client/room/get_by_xc_room_id`;
         
         if(_this.taptalk.isAuthenticated()) {
-            var userData = getLocalStorageObject('TapTalk.UserData');
+            let userData = getLocalStorageObject('TapTalk.UserData');
             authenticationHeader["Authorization"] = `Bearer ${userData.accessToken}`;
 
             doXMLHTTPRequest('POST', authenticationHeader, url, {xcRoomID: xcRoomID})
@@ -1278,15 +1302,15 @@ exports.tapCoreChatRoomManager = {
 	},
 
     updateGroupChatRoomDetails : (groupId, groupName, callback) => {
-        var url = `${baseApiUrl}/v1/client/room/update`;
-        var _this = this;
-        var data = {
+        let url = `${baseApiUrl}/v1/client/room/update`;
+        let _this = this;
+        let data = {
             roomID: groupId,
             name: groupName
         };
            this.taptalk.isAuthenticated()
         if(this.taptalk.isAuthenticated()) {
-            var userData = getLocalStorageObject('TapTalk.UserData');
+            let userData = getLocalStorageObject('TapTalk.UserData');
             authenticationHeader["Authorization"] = `Bearer ${userData.accessToken}`;
 
             doXMLHTTPRequest('POST', authenticationHeader, url, data)
@@ -1308,13 +1332,13 @@ exports.tapCoreChatRoomManager = {
     },
 
     deleteGroupChatRoom : (roomId, callback) => {
-        var url = `${baseApiUrl}/v1/client/room/delete`;
-        var _this = this;
+        let url = `${baseApiUrl}/v1/client/room/delete`;
+        let _this = this;
 
         if(this.taptalk.isAuthenticated()) {
-            var userData = getLocalStorageObject('TapTalk.UserData');
-            var checksum = md5(`${roomId}:${ROOM_TYPE.GROUP}:${userData.user.userID}:${userData.accessTokenExpiry}`);
-            var data = {
+            let userData = getLocalStorageObject('TapTalk.UserData');
+            let checksum = md5(`${roomId}:${ROOM_TYPE.GROUP}:${userData.user.userID}:${userData.accessTokenExpiry}`);
+            let data = {
                 roomID: roomId,
                 checksum: checksum
             };
@@ -1339,11 +1363,11 @@ exports.tapCoreChatRoomManager = {
     },
 
     leaveGroupChatRoom : (groupId, callback) => {
-        var url = `${baseApiUrl}/v1/client/room/leave`;
-        var _this = this;
+        let url = `${baseApiUrl}/v1/client/room/leave`;
+        let _this = this;
 
         if(this.taptalk.isAuthenticated()) {
-            var userData = getLocalStorageObject('TapTalk.UserData');
+            let userData = getLocalStorageObject('TapTalk.UserData');
             authenticationHeader["Authorization"] = `Bearer ${userData.accessToken}`;
 
             doXMLHTTPRequest('POST', authenticationHeader, url, {roomID: groupId})
@@ -1366,15 +1390,15 @@ exports.tapCoreChatRoomManager = {
     },
 
     addGroupChatMembers : (groupId, userId, callback) => {
-        var url = `${baseApiUrl}/v1/client/room/participants/add`;
-        var _this = this;
-        var data = {
+        let url = `${baseApiUrl}/v1/client/room/participants/add`;
+        let _this = this;
+        let data = {
             roomID: groupId,
             userIDs: userId
         }
 
         if(this.taptalk.isAuthenticated()) {
-            var userData = getLocalStorageObject('TapTalk.UserData');
+            let userData = getLocalStorageObject('TapTalk.UserData');
             authenticationHeader["Authorization"] = `Bearer ${userData.accessToken}`;
 
             doXMLHTTPRequest('POST', authenticationHeader, url, data)
@@ -1397,15 +1421,15 @@ exports.tapCoreChatRoomManager = {
     },
 
     removeGroupChatMembers : (groupId, userId, callback) => {
-        var url = `${baseApiUrl}/v1/client/room/participants/remove`;
-        var _this = this;
-        var data = {
+        let url = `${baseApiUrl}/v1/client/room/participants/remove`;
+        let _this = this;
+        let data = {
             roomID: groupId,
             userIDs: userId
         }
         
         if(this.taptalk.isAuthenticated()) {
-            var userData = getLocalStorageObject('TapTalk.UserData');
+            let userData = getLocalStorageObject('TapTalk.UserData');
             authenticationHeader["Authorization"] = `Bearer ${userData.accessToken}`;
 
             doXMLHTTPRequest('POST', authenticationHeader, url, data)
@@ -1427,15 +1451,15 @@ exports.tapCoreChatRoomManager = {
     }, 
 
     promoteGroupAdmins : (groupId, userId, callback) => {
-        var url = `${baseApiUrl}/v1/client/room/admins/promote`;
-        var _this = this;
-        var data = {
+        let url = `${baseApiUrl}/v1/client/room/admins/promote`;
+        let _this = this;
+        let data = {
             roomID: groupId,
             userIDs: userId
         }
 
         if(this.taptalk.isAuthenticated()) {
-            var userData = getLocalStorageObject('TapTalk.UserData');
+            let userData = getLocalStorageObject('TapTalk.UserData');
             authenticationHeader["Authorization"] = `Bearer ${userData.accessToken}`;
 
             doXMLHTTPRequest('POST', authenticationHeader, url, data)
@@ -1458,15 +1482,15 @@ exports.tapCoreChatRoomManager = {
     },
 
     demoteGroupAdmins : (groupId, userId, callback) => {
-        var url = `${baseApiUrl}/v1/client/room/admins/demote`;
-        var _this = this;
-        var data = {
+        let url = `${baseApiUrl}/v1/client/room/admins/demote`;
+        let _this = this;
+        let data = {
             roomID: groupId,
             userIDs: userId
         }
 
         if(this.taptalk.isAuthenticated()) {
-            var userData = getLocalStorageObject('TapTalk.UserData');
+            let userData = getLocalStorageObject('TapTalk.UserData');
             authenticationHeader["Authorization"] = `Bearer ${userData.accessToken}`;
 
             doXMLHTTPRequest('POST', authenticationHeader, url, data)
@@ -1489,11 +1513,11 @@ exports.tapCoreChatRoomManager = {
     },
 
     downloadMessageFile : (message, callback) => {
-		var url = `${baseApiUrl}/v1/chat/file/download`;
-		var _this = this;
+		let url = `${baseApiUrl}/v1/chat/file/download`;
+		let _this = this;
 
         if(this.taptalk.isAuthenticated()) {
-            var userData = getLocalStorageObject('TapTalk.UserData');
+            let userData = getLocalStorageObject('TapTalk.UserData');
             authenticationHeader["Authorization"] = `Bearer ${userData.accessToken}`;
 
             doXMLHTTPRequestToBase64('POST', authenticationHeader, url, {roomID: message.room.roomID, fileID: message.data.fileID}, message, callback.onProgress)
@@ -1521,9 +1545,9 @@ exports.tapCoreChatRoomManager = {
 	// }
     
     getFileFromDB(fileID, callback) {
-		var tx = db.transaction(['files'], 'readwrite');
+		let tx = db.transaction(['files'], 'readwrite');
 	
-		var store = tx.objectStore('files');
+		let store = tx.objectStore('files');
 
 		var objectStoreRequest = store.get(fileID);
 		
@@ -1543,18 +1567,18 @@ exports.tapCoreChatRoomManager = {
 
 exports.tapCoreMessageManager  = {
     constructTapTalkMessageModel : (messageBody, room, messageType, messageData, localID = null) => {
-        var generateRecipient = () => {
+        let generateRecipient = () => {
 			if(room.type === 1) {
-                var roomSplit = room.roomID.split("-");
+                let roomSplit = room.roomID.split("-");
 				return roomSplit[0] === this.taptalk.getTaptalkActiveUser().userID ? roomSplit[1] : roomSplit[0];
 			}else {
 				return "0";
 			}
         }
         
-        var guidVal = guid();
+        let guidVal = guid();
 
-        var generateData = () => {
+        let generateData = () => {
 			if(typeof messageData === 'object') {
 				return encryptKey(JSON.stringify(messageData), localID !== null ? localID : guidVal);
 			}
@@ -1583,8 +1607,8 @@ exports.tapCoreMessageManager  = {
     },
 
     constructTapTalkMessageModelWithQuote : (messageBody, room, messageType, messageData, quotedMessage) => {
-        var roomSplit = room.split("-");
-        var recipient = roomSplit[0] === this.taptalk.getTaptalkActiveUser().userID ? roomSplit[1] : roomSplit[0];
+        let roomSplit = room.split("-");
+        let recipient = roomSplit[0] === this.taptalk.getTaptalkActiveUser().userID ? roomSplit[1] : roomSplit[0];
         MESSAGE_MODEL["user"] = this.taptalk.getTaptalkActiveUser();
         MESSAGE_MODEL["type"] = messageType;
         MESSAGE_MODEL["body"] = messageBody;
@@ -1611,7 +1635,7 @@ exports.tapCoreMessageManager  = {
         if(this.taptalk.isAuthenticated()) {
             this.tapCoreMessageManager.constructTapTalkMessageModel(messageBody, room, CHAT_MESSAGE_TYPE_TEXT, "");
 
-            var emitData = {
+            let emitData = {
                 eventName: SOCKET_NEW_MESSAGE,
                 data: MESSAGE_MODEL
             };
@@ -1626,7 +1650,7 @@ exports.tapCoreMessageManager  = {
         if(this.taptalk.isAuthenticated()) {
             this.tapCoreMessageManager.constructTapTalkMessageModelWithQuote(encryptKey(messageBody, guid()), room, CHAT_MESSAGE_TYPE_TEXT, "", quotedMessage);
 
-            var emitData = {
+            let emitData = {
                 eventName: SOCKET_NEW_MESSAGE,
                 data: MESSAGE_MODEL
             };
@@ -1637,7 +1661,7 @@ exports.tapCoreMessageManager  = {
 
     sendLocationMessage : (latitude, longitude, address, room, callback) => {
         if(this.taptalk.isAuthenticated()) {
-            var data =  encryptKey(`
+            let data =  encryptKey(`
                      {
                          address = "${address}";
                          latitude = "${latitude}";
@@ -1648,7 +1672,7 @@ exports.tapCoreMessageManager  = {
             this.tapCoreMessageManager.constructTapTalkMessageModel("", room, CHAT_MESSAGE_TYPE_LOCATION, data);
             this.tapCoreMessageManager.constructMessageStatus(true, false, false, false);
 
-            var emitData = {
+            let emitData = {
                 eventName: SOCKET_NEW_MESSAGE,
                 data: MESSAGE_MODEL
             };
@@ -1659,7 +1683,7 @@ exports.tapCoreMessageManager  = {
 
     sendLocationMessageQuotedMessage : (latitude, longitude, address, room, quotedMessage, callback) => {
         if(this.taptalk.isAuthenticated()) {
-            var data =  encryptKey(`
+            let data =  encryptKey(`
                      {
                          address = "${address}";
                          latitude = "${latitude}";
@@ -1670,7 +1694,7 @@ exports.tapCoreMessageManager  = {
             this.tapCoreMessageManager.constructTapTalkMessageModelWithQuote("", room, CHAT_MESSAGE_TYPE_LOCATION, data, quotedMessage);
             this.tapCoreMessageManager.constructMessageStatus(true, false, false, false);
 
-            var emitData = {
+            let emitData = {
                 eventName: SOCKET_NEW_MESSAGE,
                 data: MESSAGE_MODEL
             };
@@ -1680,13 +1704,13 @@ exports.tapCoreMessageManager  = {
     },
 
     uploadChatFile : (data, callback) => {
-        var url = `${baseApiUrl}/v1/chat/file/upload`;
-        var uploadData = new FormData();
-        var _this = this;
-        var fileType = data.file.type.split("/")[0];
+        let url = `${baseApiUrl}/v1/chat/file/upload`;
+        let uploadData = new FormData();
+        let _this = this;
+        let fileType = data.file.type.split("/")[0];
 
-        var generateBase64 = (fileID) => {
-			var readerUploadData = new FileReader();
+        let generateBase64 = (fileID) => {
+			let readerUploadData = new FileReader();
 			readerUploadData.readAsDataURL(data.file);
 
 			readerUploadData.onload = function () {
@@ -1704,7 +1728,7 @@ exports.tapCoreMessageManager  = {
         uploadData.append("fileType", fileType !== "image" || "video" ? "file" : fileType);
         
         if(_this.taptalk.isAuthenticated()) {
-            var userData = getLocalStorageObject('TapTalk.UserData');
+            let userData = getLocalStorageObject('TapTalk.UserData');
             authenticationHeader["Authorization"] = `Bearer ${userData.accessToken}`;
 
             doXMLHTTPRequestUpload('POST', authenticationHeader, url, uploadData, callback.onProgress)
@@ -1728,10 +1752,10 @@ exports.tapCoreMessageManager  = {
     },
 
     sendImageMessage : (file, caption, room, callback) => {
-        var imageWidth = "";
-		var imageHeight = "";
-		var _URL = window.URL || window.webkitURL;
-		var img = new Image();
+        let imageWidth = "";
+		let imageHeight = "";
+		let _URL = window.URL || window.webkitURL;
+		let img = new Image();
 
 		img.onload = function () {
 			imageWidth = this.width;
@@ -1740,21 +1764,21 @@ exports.tapCoreMessageManager  = {
 		
 		img.src = _URL.createObjectURL(file);
 
-		var _this = this;
+		let _this = this;
 
 		compressImageFile(file, 20, 20).then(function(imageCompressResult) {
 			if(file.size > projectConfigs.core.chatMediaMaxFileSize) {
 				callback.onError('90302', 'The request failed because maximum file size was exceeded.');
 			}else {
-				var currentLocalID = guid();
+				let currentLocalID = guid();
 	
-				var uploadData = {
+				let uploadData = {
 					file: file,
 					caption: caption,
 					room: room.roomID
 				};
 	
-				var data = {
+				let data = {
 					fileName: file.name,
 					mediaType: file.type,
 					size: file.size,
@@ -1769,7 +1793,7 @@ exports.tapCoreMessageManager  = {
 				_this.tapCoreMessageManager.constructTapTalkMessageModel(file.name, room, CHAT_MESSAGE_TYPE_IMAGE, data, currentLocalID);
 				_this.tapCoreMessageManager.constructMessageStatus(true, false, false, false);
 	
-				var newMessageFile = Object.assign({}, MESSAGE_MODEL);
+				let newMessageFile = Object.assign({}, MESSAGE_MODEL);
 	
 				newMessageFile.data = JSON.parse(decryptKey(newMessageFile.data, currentLocalID));
 	
@@ -1781,7 +1805,7 @@ exports.tapCoreMessageManager  = {
 					},
 		
 					onSuccess: (response) => {
-						var data = {
+						let data = {
 							fileName: file.name,
 							mediaType: file.type,
 							size: file.size,
@@ -1797,7 +1821,7 @@ exports.tapCoreMessageManager  = {
 							_this.tapCoreMessageManager.constructTapTalkMessageModel(file.name, room, CHAT_MESSAGE_TYPE_IMAGE, data, currentLocalID);
 							_this.tapCoreMessageManager.constructMessageStatus(true, false, false, false);
 		
-							var emitData = {
+							let emitData = {
 								eventName: SOCKET_NEW_MESSAGE,
 								data: MESSAGE_MODEL
 							};
@@ -1820,17 +1844,17 @@ exports.tapCoreMessageManager  = {
     },
 
     sendImageMessageQuotedMessage : (file, caption, room, quotedMessage, callback) => {
-        var uploadData = {
+        let uploadData = {
             file: file,
             caption: caption,
             room: room
         };
 
-        var _this = this;
+        let _this = this;
 
         this.tapCoreMessageManager.uploadChatFile(uploadData, function(response, error) {
             if(response) {
-                var messageData = encryptKey(`{
+                let messageData = encryptKey(`{
                     {
                         fileID = "${response.fileID}";
                     }
@@ -1839,7 +1863,7 @@ exports.tapCoreMessageManager  = {
                 _this.tapCoreMessageManager.constructTapTalkMessageModelWithQuote("", room, CHAT_MESSAGE_TYPE_IMAGE, messageData, quotedMessage);
                 _this.tapCoreMessageManager.constructMessageStatus(true, false, false, false);
 
-                var emitData = {
+                let emitData = {
                     eventName: SOCKET_NEW_MESSAGE,
                     data: MESSAGE_MODEL
                 };
@@ -1852,11 +1876,11 @@ exports.tapCoreMessageManager  = {
     },
 
     sendVideoMessage : (file, caption, room, callback) => {
-        var _this = this;
+        let _this = this;
 
-		var videoMetaData = (file) => {
+		let videoMetaData = (file) => {
 			return new Promise(function(resolve, reject) {
-				var video = document.createElement('video');
+				let video = document.createElement('video');
 				// video.preload = 'metadata';
 
 				video.onloadedmetadata = function() {
@@ -1875,7 +1899,7 @@ exports.tapCoreMessageManager  = {
 		}
 
 		videoMetaData(file).then(function(value) {
-			var videoCanvas = document.createElement('canvas');
+			let videoCanvas = document.createElement('canvas');
             videoCanvas.height = value.height;
             videoCanvas.width = value.width;
             videoCanvas.getContext('2d').drawImage(value.video, 0, 0)
@@ -1884,15 +1908,15 @@ exports.tapCoreMessageManager  = {
 			if(file.size > projectConfigs.core.chatMediaMaxFileSize) {
 				callback.onError('90302', 'The request failed because maximum file size was exceeded.');
 			}else {
-				var currentLocalID = guid();
+				let currentLocalID = guid();
 	
-				var uploadData = {
+				let uploadData = {
 					file: file,
 					caption: caption,
 					room: room.roomID
 				};
 	
-				var data = {
+				let data = {
 					fileName: file.name,
 					mediaType: file.type,
 					size: file.size,
@@ -1907,7 +1931,7 @@ exports.tapCoreMessageManager  = {
 				_this.tapCoreMessageManager.constructTapTalkMessageModel(file.name, room, CHAT_MESSAGE_TYPE_VIDEO, data, currentLocalID);
 				_this.tapCoreMessageManager.constructMessageStatus(true, false, false, false);
 	
-				var newMessageFile = Object.assign({}, MESSAGE_MODEL);
+				let newMessageFile = Object.assign({}, MESSAGE_MODEL);
 	
 				newMessageFile.data = JSON.parse(decryptKey(newMessageFile.data, currentLocalID));
 	
@@ -1919,7 +1943,7 @@ exports.tapCoreMessageManager  = {
 					},
 		
 					onSuccess: (response) => {
-						var data = {
+						let data = {
 							fileName: file.name,
 							mediaType: file.type,
 							size: file.size,
@@ -1935,7 +1959,7 @@ exports.tapCoreMessageManager  = {
 							_this.tapCoreMessageManager.constructTapTalkMessageModel(file.name, room, CHAT_MESSAGE_TYPE_VIDEO, data, currentLocalID);
 							_this.tapCoreMessageManager.constructMessageStatus(true, false, false, false);
 		
-							var emitData = {
+							let emitData = {
 								eventName: SOCKET_NEW_MESSAGE,
 								data: MESSAGE_MODEL
 							};
@@ -1958,17 +1982,17 @@ exports.tapCoreMessageManager  = {
     },
 
     sendVideoMessageQuotedMessage : (videoUri, caption, room, quotedMessage, callback) => {
-        var uploadData = {
+        let uploadData = {
             file: videoUri,
             caption: caption,
             room: room
         };
 
-        var _this = this;
+        let _this = this;
 
         this.tapCoreMessageManager.uploadChatFile(uploadData, function(response, error) {
             if(response) {
-                var messageData = encryptKey(`{
+                let messageData = encryptKey(`{
                     {
                         fileID = "${response.fileID}";
                     }
@@ -1977,7 +2001,7 @@ exports.tapCoreMessageManager  = {
                 _this.tapCoreMessageManager.constructTapTalkMessageModelWithQuote("", room, CHAT_MESSAGE_TYPE_VIDEO, messageData, quotedMessage);
                 _this.tapCoreMessageManager.constructMessageStatus(true, false, false, false);
 
-                var emitData = {
+                let emitData = {
                     eventName: SOCKET_NEW_MESSAGE,
                     data: MESSAGE_MODEL
                 };
@@ -1993,17 +2017,17 @@ exports.tapCoreMessageManager  = {
         if(file.size > projectConfigs.core.chatMediaMaxFileSize) {
 			callback.onError('90302', 'The request failed because maximum file size was exceeded.');
 		}else {
-            var currentLocalID = guid();
+            let currentLocalID = guid();
 
-            var uploadData = {
+            let uploadData = {
                 file: file,
                 caption: "",
                 room: room.roomID
             };
 
-            var _this = this;
+            let _this = this;
 
-            var data = {
+            let data = {
                 fileName: file.name,
                 mediaType: file.type,
                 size: file.size,
@@ -2013,7 +2037,7 @@ exports.tapCoreMessageManager  = {
             this.tapCoreMessageManager.constructTapTalkMessageModel(file.name, room, CHAT_MESSAGE_TYPE_FILE, data, currentLocalID);
             this.tapCoreMessageManager.constructMessageStatus(true, false, false, false);
 
-            var newMessageFile = Object.assign({}, MESSAGE_MODEL);
+            let newMessageFile = Object.assign({}, MESSAGE_MODEL);
             
             newMessageFile.data = JSON.parse(decryptKey(newMessageFile.data, currentLocalID));
 
@@ -2031,7 +2055,7 @@ exports.tapCoreMessageManager  = {
                         _this.tapCoreMessageManager.constructTapTalkMessageModel(file.name, room, CHAT_MESSAGE_TYPE_FILE, data, currentLocalID);
                         _this.tapCoreMessageManager.constructMessageStatus(true, false, false, false);
 
-                        var emitData = {
+                        let emitData = {
                             eventName: SOCKET_NEW_MESSAGE,
                             data: MESSAGE_MODEL
                         };
@@ -2053,17 +2077,17 @@ exports.tapCoreMessageManager  = {
     },
 
     sendFileMessageQuotedMessage : (file, room, quotedMessage, callback) => {
-        var uploadData = {
+        let uploadData = {
             file: file,
             caption: "",
             room: room
         };
 
-        var _this = this;
+        let _this = this;
 
         this.tapCoreMessageManager.uploadChatFile(uploadData, function(response, error) {
             if(response) {
-                var messageData = encryptKey(`{
+                let messageData = encryptKey(`{
                     {
                         fileID = "${response.fileID}";
                     }
@@ -2072,7 +2096,7 @@ exports.tapCoreMessageManager  = {
                 _this.tapCoreMessageManager.constructTapTalkMessageModelWithQuote("", room, CHAT_MESSAGE_TYPE_FILE, messageData, quotedMessage);
                 _this.tapCoreMessageManager.constructMessageStatus(true, false, false, false);
 
-                var emitData = {
+                let emitData = {
                     eventName: SOCKET_NEW_MESSAGE,
                     data: MESSAGE_MODEL
                 };
@@ -2085,13 +2109,13 @@ exports.tapCoreMessageManager  = {
     },
 
     getOlderMessagesBeforeTimestamp : (roomID, numberOfItems, callback) => {
-        var url = `${baseApiUrl}/v1/chat/message/list_by_room/before`;
-		var _this = this;
-		var maxCreatedTimestamp;
+        let url = `${baseApiUrl}/v1/chat/message/list_by_room/before`;
+		let _this = this;
+		let maxCreatedTimestamp;
 
 		maxCreatedTimestamp =  tapTalkRooms[roomID].messages[tapTalkRooms[roomID].messages.length - 1].created;
 
-        var data = {
+        let data = {
             roomID: roomID,
             maxCreated: maxCreatedTimestamp,
             limit: numberOfItems
@@ -2099,7 +2123,7 @@ exports.tapCoreMessageManager  = {
 
         if(this.taptalk.isAuthenticated()) {
 			if(tapTalkRooms[roomID]) {
-				var userData = getLocalStorageObject('TapTalk.UserData');
+				let userData = getLocalStorageObject('TapTalk.UserData');
 				authenticationHeader["Authorization"] = `Bearer ${userData.accessToken}`;
 
 				if(tapTalkRooms[roomID].hasMore) {
@@ -2107,20 +2131,20 @@ exports.tapCoreMessageManager  = {
 						.then(function (response) {
 							if(response.error.code === "") {
 								tapTalkRooms[roomID].hasMore = response.data.hasMore;
-								for(var i in response.data.messages) {
+								for(let i in response.data.messages) {
 									response.data.messages[i].body = decryptKey(response.data.messages[i].body, response.data.messages[i].localID);
 
 									if((response.data.messages[i].data !== "") && !response.data.messages[i].isDeleted) {
-										var messageIndex = response.data.messages[i];
+										let messageIndex = response.data.messages[i];
 										messageIndex.data = JSON.parse(decryptKey(messageIndex.data, messageIndex.localID));
                                     }
                                     
                                     if(response.data.messages[i].replyTo.localID !== "") {
-                                        var messageIndex = response.data.messages[i];
+                                        let messageIndex = response.data.messages[i];
                                         messageIndex.quote.content = decryptKey(messageIndex.quote.content, messageIndex.localID)
                                     }
 									
-									var localIDExist = tapTalkRooms[roomID].messages.findIndex(value => value.localID === response.data.messages[i].localID);
+									let localIDExist = tapTalkRooms[roomID].messages.findIndex(value => value.localID === response.data.messages[i].localID);
 									
 									if(localIDExist === -1) {
 										tapTalkRooms[roomID].messages.push(response.data.messages[i]);
@@ -2147,27 +2171,27 @@ exports.tapCoreMessageManager  = {
     },
 
     getNewerMessagesAfterTimestamp : (roomID, callback, minCreatedTimestamp = null) => {
-        var url = `${baseApiUrl}/v1/chat/message/list_by_room/after`;
-		var _this = this;
-		var lastUpdateTimestamp;
+        let url = `${baseApiUrl}/v1/chat/message/list_by_room/after`;
+		let _this = this;
+		let lastUpdateTimestamp;
 		lastUpdateTimestamp = tapTalkRooms[roomID].lastUpdated === 0 ? tapTalkRooms[roomID].messages[tapTalkRooms[roomID].messages.length - 1].created : tapTalkRooms[roomID].lastUpdated;
 		
-        var data = {
+        let data = {
             roomID: roomID,
             minCreated: minCreatedTimestamp === null ? getMinCreatedTimestamp : minCreatedTimestamp,
             lastUpdated: lastUpdateTimestamp
 		};
 		
-		var apiAfterRequest = () => {
+		let apiAfterRequest = () => {
 			doXMLHTTPRequest('POST', authenticationHeader, url, data)
 					.then(function (response) {
 						if(response.error.code === "") {
 							if(minCreatedTimestamp === null) {
-								// var currentLatestIndex = tapTalkRooms[roomID].messages.length - 1;
+								// let currentLatestIndex = tapTalkRooms[roomID].messages.length - 1;
 								// tapTalkRooms[roomID].messages.splice(currentLatestIndex, 1);
 								var currentRoomMessages = tapTalkRooms[roomID].messages;
 
-								for(var i in currentRoomMessages) {
+								for(let i in currentRoomMessages) {
 									currentRoomMessages[i].body = encryptKey(currentRoomMessages[i].body, currentRoomMessages[i].localID);
 								}
 
@@ -2177,28 +2201,28 @@ exports.tapCoreMessageManager  = {
 								// tapTalkRooms[roomID].messages = [];
 							}
 
-							for(var i in newAPIAfterResponse) {
+							for(let i in newAPIAfterResponse) {
 								newAPIAfterResponse[i].body = decryptKey(newAPIAfterResponse[i].body, newAPIAfterResponse[i].localID);
 
 								if(newAPIAfterResponse[i].data !== "") {
-									var messageIndex = newAPIAfterResponse[i];
+									let messageIndex = newAPIAfterResponse[i];
 									if(typeof messageIndex.data === "string") {
 										messageIndex.data = JSON.parse(decryptKey(messageIndex.data, messageIndex.localID));
 									}
 								}
 
 								if(newAPIAfterResponse[i].replyTo.localID !== "") {
-									var messageIndex = newAPIAfterResponse[i];
+									let messageIndex = newAPIAfterResponse[i];
 									messageIndex.quote.content = decryptKey(messageIndex.quote.content, messageIndex.localID)
 								}
 								
-								var localIDExist = tapTalkRooms[roomID].messages.findIndex(value => value.localID === newAPIAfterResponse[i].localID);
+								let localIDExist = tapTalkRooms[roomID].messages.findIndex(value => value.localID === newAPIAfterResponse[i].localID);
 
 								if(localIDExist === -1) {
 									tapTalkRooms[roomID].messages.push(newAPIAfterResponse[i]);
 								}
 
-								var lastUpdated = tapTalkRooms[roomID].lastUpdated;
+								let lastUpdated = tapTalkRooms[roomID].lastUpdated;
 								
 								if(lastUpdated < newAPIAfterResponse[i].updated) {
 									tapTalkRooms[roomID].lastUpdated = newAPIAfterResponse[i].updated;
@@ -2220,7 +2244,7 @@ exports.tapCoreMessageManager  = {
 		}
 
         if(this.taptalk.isAuthenticated()) {
-            var userData = getLocalStorageObject('TapTalk.UserData');
+            let userData = getLocalStorageObject('TapTalk.UserData');
             authenticationHeader["Authorization"] = `Bearer ${userData.accessToken}`;
 			
 			if(minCreatedTimestamp === null ) {
@@ -2228,7 +2252,7 @@ exports.tapCoreMessageManager  = {
 					if(minCreatedTimestamp === null) {
 						var getMinCreatedTimestamp;
 						getMinCreatedTimestamp =  tapTalkRooms[roomID].messages[tapTalkRooms[roomID].messages.length - 1].created;
-						// var currentLatestIndex = tapTalkRooms[roomID].messages.length - 1;
+						// let currentLatestIndex = tapTalkRooms[roomID].messages.length - 1;
 						// tapTalkRooms[roomID].messages.splice(currentLatestIndex, 1);
 					}
 					
@@ -2243,11 +2267,11 @@ exports.tapCoreMessageManager  = {
     },
 
     markMessageAsRead : (message) => {
-        var url = `${baseApiUrl}/v1/chat/message/feedback/read`;
-        var _this = this;
+        let url = `${baseApiUrl}/v1/chat/message/feedback/read`;
+        let _this = this;
 
         if(this.taptalk.isAuthenticated()) {
-            var userData = getLocalStorageObject('TapTalk.UserData');
+            let userData = getLocalStorageObject('TapTalk.UserData');
             authenticationHeader["Authorization"] = `Bearer ${userData.accessToken}`;
 
             doXMLHTTPRequest('POST', authenticationHeader, url, {messageIDs: message})
@@ -2263,11 +2287,11 @@ exports.tapCoreMessageManager  = {
     },
 
     markMessageAsDelivered : (message) => {
-        var url = `${baseApiUrl}/v1/chat/message/feedback/delivered`;
-        var _this = this;
+        let url = `${baseApiUrl}/v1/chat/message/feedback/delivered`;
+        let _this = this;
 
         if(this.taptalk.isAuthenticated()) {
-            var userData = getLocalStorageObject('TapTalk.UserData');
+            let userData = getLocalStorageObject('TapTalk.UserData');
             authenticationHeader["Authorization"] = `Bearer ${userData.accessToken}`;
 
             doXMLHTTPRequest('POST', authenticationHeader, url, {messageIDs: message})
@@ -2283,13 +2307,13 @@ exports.tapCoreMessageManager  = {
     },
 	
 	markMessageAsDeleted : (roomID, messages, forEveryone) => {
-        var url = `${baseApiUrl}/v1/chat/message/delete`;
-        var _this = this;
+        let url = `${baseApiUrl}/v1/chat/message/delete`;
+        let _this = this;
 
         if(this.taptalk.isAuthenticated()) {
-            var userData = getLocalStorageObject('TapTalk.UserData');
+            let userData = getLocalStorageObject('TapTalk.UserData');
 			authenticationHeader["Authorization"] = `Bearer ${userData.accessToken}`;
-			var data = {
+			let data = {
 				roomID: roomID,
 				messageIDs: messages,
 				forEveryone: forEveryone
@@ -2301,8 +2325,8 @@ exports.tapCoreMessageManager  = {
 						if(response.error.code === "40104") {
 							_this.taptalk.refreshAccessToken(() => _this.tapCoreMessageManager.markMessageAsDeleted(roomID, messages, forEveryone));
 						}else {
-							for(var i in messages) {
-								var findIndex = tapTalkRooms[roomID].messages.findIndex(value => value.messageID === messages[i]);
+							for(let i in messages) {
+								let findIndex = tapTalkRooms[roomID].messages.findIndex(value => value.messageID === messages[i]);
 								tapTalkRooms[roomID].messages[findIndex].isDeleted = true;
 							}
 						}
@@ -2317,11 +2341,11 @@ exports.tapCoreMessageManager  = {
 
 exports.tapCoreContactManager  = {
     getAllUserContacts : (callback) => {
-        var url = `${baseApiUrl}/v1/client/contact/list`;
-        var _this = this;
+        let url = `${baseApiUrl}/v1/client/contact/list`;
+        let _this = this;
 
         if(this.taptalk.isAuthenticated()) {
-            var userData = getLocalStorageObject('TapTalk.UserData');
+            let userData = getLocalStorageObject('TapTalk.UserData');
             authenticationHeader["Authorization"] = `Bearer ${userData.accessToken}`;
 
             doXMLHTTPRequest('POST', authenticationHeader, url, "")
@@ -2344,9 +2368,9 @@ exports.tapCoreContactManager  = {
     },
 
     getFilterUserContacts : (contactString, callback) => {
-		var contactSearchResult = [];
+		let contactSearchResult = [];
 		setTimeout(function() {
-			for(var i in taptalkContact) {
+			for(let i in taptalkContact) {
 				if(taptalkContact[i].user.fullname.includes(contactString) || taptalkContact[i].user.username.includes(contactString)) {
 					contactSearchResult.push(taptalkContact[i])
 				}
@@ -2361,11 +2385,11 @@ exports.tapCoreContactManager  = {
 	},
 
     getUserDataWithUserID : (userId, callback) => {
-        var url = `${baseApiUrl}/v1/client/user/get_by_id`;
-        var _this = this;
+        let url = `${baseApiUrl}/v1/client/user/get_by_id`;
+        let _this = this;
 
         if(this.taptalk.isAuthenticated()) {
-            var userData = getLocalStorageObject('TapTalk.UserData');
+            let userData = getLocalStorageObject('TapTalk.UserData');
             authenticationHeader["Authorization"] = `Bearer ${userData.accessToken}`;
 
             doXMLHTTPRequest('POST', authenticationHeader, url, {id: userId})
@@ -2391,11 +2415,11 @@ exports.tapCoreContactManager  = {
     },
 
     getUserDataWithXCUserID : (xcUserId, callback) => {
-        var url = `${baseApiUrl}/v1/client/user/get_by_xcuserid`;
-        var _this = this;
+        let url = `${baseApiUrl}/v1/client/user/get_by_xcuserid`;
+        let _this = this;
 
         if(this.taptalk.isAuthenticated()) {
-            var userData = getLocalStorageObject('TapTalk.UserData');
+            let userData = getLocalStorageObject('TapTalk.UserData');
             authenticationHeader["Authorization"] = `Bearer ${userData.accessToken}`;
 
             doXMLHTTPRequest('POST', authenticationHeader, url, {xcUserID: xcUserId})
@@ -2418,11 +2442,11 @@ exports.tapCoreContactManager  = {
     },
 
     addToTapTalkContactsWithUserID : (userId, callback) => {
-        var url = `${baseApiUrl}/v1/client/contact/add`;
-        var _this = this;
+        let url = `${baseApiUrl}/v1/client/contact/add`;
+        let _this = this;
 
         if(this.taptalk.isAuthenticated()) {
-            var userData = getLocalStorageObject('TapTalk.UserData');
+            let userData = getLocalStorageObject('TapTalk.UserData');
             authenticationHeader["Authorization"] = `Bearer ${userData.accessToken}`;
 
             doXMLHTTPRequest('POST', authenticationHeader, url, {userID: userId})
@@ -2444,11 +2468,11 @@ exports.tapCoreContactManager  = {
     },
 
     addToTapTalkContactsWithPhoneNumber : (phoneNumber, callback) => {
-        var url = `${baseApiUrl}/v1/client/contact/add_by_phones`;
-        var _this = this;
+        let url = `${baseApiUrl}/v1/client/contact/add_by_phones`;
+        let _this = this;
 
         if(this.taptalk.isAuthenticated()) {
-            var userData = getLocalStorageObject('TapTalk.UserData');
+            let userData = getLocalStorageObject('TapTalk.UserData');
             authenticationHeader["Authorization"] = `Bearer ${userData.accessToken}`;
 
             doXMLHTTPRequest('POST', authenticationHeader, url, {phones: phoneNumber})
@@ -2470,11 +2494,11 @@ exports.tapCoreContactManager  = {
     },
 
     getUserByUsername : (username, ignoreCase, callback) => {
-		var url = `${baseApiUrl}/v1/client/user/get_by_username`;
-        var _this = this;
+		let url = `${baseApiUrl}/v1/client/user/get_by_username`;
+        let _this = this;
 
         if(this.taptalk.isAuthenticated()) {
-            var userData = getLocalStorageObject('TapTalk.UserData');
+            let userData = getLocalStorageObject('TapTalk.UserData');
             authenticationHeader["Authorization"] = `Bearer ${userData.accessToken}`;
 
             doXMLHTTPRequest('POST', authenticationHeader, url, {username: username, ignoreCase: ignoreCase})
@@ -2497,11 +2521,11 @@ exports.tapCoreContactManager  = {
 	},
 
     removeFromTapTalkContacts : (userId, callback) => {
-        var url = `${baseApiUrl}/v1/client/contact/remove`;
-        var _this = this;
+        let url = `${baseApiUrl}/v1/client/contact/remove`;
+        let _this = this;
 
         if(this.taptalk.isAuthenticated()) {
-            var userData = getLocalStorageObject('TapTalk.UserData');
+            let userData = getLocalStorageObject('TapTalk.UserData');
             authenticationHeader["Authorization"] = `Bearer ${userData.accessToken}`;
 
             doXMLHTTPRequest('POST', authenticationHeader, url, {userID: userId})
@@ -2584,10 +2608,10 @@ function decrypt(text, key) {
           return null; 
       }
 
-      var substringLocalID = localID.substring(8, 8+16);
-      var reverseSubstringLocalID = "";
-      var appendedString = "";
-      var charIndex = substringLocalID.length;
+      let substringLocalID = localID.substring(8, 8+16);
+      let reverseSubstringLocalID = "";
+      let appendedString = "";
+      let charIndex = substringLocalID.length;
       
       while(charIndex > 0) {
           charIndex--;
@@ -2597,23 +2621,23 @@ function decrypt(text, key) {
       }
 
       //password is generated based on 16 first characters of KEY_PASSWORD_ENCRYPTOR + reversedSubstringLocalID
-      var substringKeyPassword = KEY_PASSWORD_ENCRYPTOR.substring(0, 16);
-      var password = substringKeyPassword + reverseSubstringLocalID;
+      let substringKeyPassword = KEY_PASSWORD_ENCRYPTOR.substring(0, 16);
+      let password = substringKeyPassword + reverseSubstringLocalID;
 
-      var stringLength = text.length;
-      var localIDLength = localID.length;
-      var localIDIndex = stringLength % localIDLength;
+      let stringLength = text.length;
+      let localIDLength = localID.length;
+      let localIDIndex = stringLength % localIDLength;
 
-      var saltString = localID.substring(localIDIndex, localIDIndex+1);
-      var encryptedString = encrypt(text, password);
+      let saltString = localID.substring(localIDIndex, localIDIndex+1);
+      let encryptedString = encrypt(text, password);
 
-      var randomNumber = Math.floor(Math.random() * 8) + 1;
-      var encryptedStringLength = encryptedString.length;
+      let randomNumber = Math.floor(Math.random() * 8) + 1;
+      let encryptedStringLength = encryptedString.length;
 
-      var saltCharIndexPosition = (((encryptedStringLength + randomNumber) * randomNumber) % encryptedStringLength);
-      var encryptedStringWithSalt = encryptedString;
+      let saltCharIndexPosition = (((encryptedStringLength + randomNumber) * randomNumber) % encryptedStringLength);
+      let encryptedStringWithSalt = encryptedString;
 
-      var appendString = (str, index, value) => {
+      let appendString = (str, index, value) => {
           return str.substr(0, index) + value + str.substr(index);
       }
       encryptedStringWithSalt = appendString(encryptedStringWithSalt, saltCharIndexPosition, saltString);
@@ -2627,10 +2651,10 @@ function decrypt(text, key) {
           return null; 
       }
 
-      var substringLocalID = localID.substring(8, 8+16);
-      var reverseSubstringLocalID = "";
-      var appendedString;
-      var charIndex = substringLocalID.length;
+      let substringLocalID = localID.substring(8, 8+16);
+      let reverseSubstringLocalID = "";
+      let appendedString;
+      let charIndex = substringLocalID.length;
 
       while(charIndex > 0) {
           charIndex--;
@@ -2640,17 +2664,17 @@ function decrypt(text, key) {
       }
 
       //password is generated based on 16 first characters of KEY_PASSWORD_ENCRYPTOR + reversedSubstringLocalID
-      var substringKeyPassword = KEY_PASSWORD_ENCRYPTOR.substring(0, 16);
-      var password = substringKeyPassword + reverseSubstringLocalID;
+      let substringKeyPassword = KEY_PASSWORD_ENCRYPTOR.substring(0, 16);
+      let password = substringKeyPassword + reverseSubstringLocalID;
       
-      var encryptedStringWithSalt = encryptedString;
-      var encryptedStringLength = encryptedStringWithSalt.length - 2; //2 to remove random number & salt character
+      let encryptedStringWithSalt = encryptedString;
+      let encryptedStringLength = encryptedStringWithSalt.length - 2; //2 to remove random number & salt character
 
-      var randomNumberString = encryptedStringWithSalt.substring(0, 1);
-      var randomNumber = parseInt(randomNumberString);
+      let randomNumberString = encryptedStringWithSalt.substring(0, 1);
+      let randomNumber = parseInt(randomNumberString);
 
-      var saltCharIndexPosition = (((encryptedStringLength + randomNumber) * randomNumber) % encryptedStringLength);
-      var encryptedStringModified = encryptedStringWithSalt.substr(1);
+      let saltCharIndexPosition = (((encryptedStringLength + randomNumber) * randomNumber) % encryptedStringLength);
+      let encryptedStringModified = encryptedStringWithSalt.substr(1);
 
       if(saltCharIndexPosition < encryptedStringModified.length) {
           encryptedStringModified = encryptedStringModified.substring(0, saltCharIndexPosition) + '' + encryptedStringModified.substring(saltCharIndexPosition + 1);
@@ -2658,7 +2682,7 @@ function decrypt(text, key) {
           return null;
       }
 
-      var decryptedString = decrypt(encryptedStringModified, password);
+      let decryptedString = decrypt(encryptedStringModified, password);
 
       return decryptedString
   }
