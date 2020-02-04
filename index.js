@@ -736,7 +736,7 @@ exports.taptalk = {
                         callback.onSuccess('Successfully connected to TapTalk.io server');  
                     }
                     webSocket.onclose = function () {
-                        callback.onClose('Successfully connected to TapTalk.io server');  
+                        callback.onClose('Disconnected from TapTalk.io server');  
                     };
                     webSocket.onerror = function () {
                         callback.onError('Error while connecting to web socket');
