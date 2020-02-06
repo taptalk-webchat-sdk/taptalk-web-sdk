@@ -1032,7 +1032,8 @@ exports.tapCoreRoomListManager = {
 					tapTalkRoomListHashmap = Object.assign({[message.room.roomID] : data}, tapTalkRoomListHashmap);
 				}else {
 					// unreadCounter();
-					let temporaryRoomList = tapTalkRoomListHashmap[message.room.roomID];
+                    let temporaryRoomList = tapTalkRoomListHashmap[message.room.roomID];
+                    temporaryRoomList.lastMessage = message;
 	
 					delete tapTalkRoomListHashmap[message.room.roomID];
 	
