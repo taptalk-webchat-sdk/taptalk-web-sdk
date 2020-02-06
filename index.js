@@ -2,6 +2,7 @@ var define, CryptoJS;
 var crypto = require('crypto');
 var md5 = require('./lib/md5');
 var tapTalkRooms = {};
+var tapTalkRoomListHashmap = {};
 var tapRoomStatusListeners = [];
 var tapMessageListeners = [];
 var tapListener = [];
@@ -531,6 +532,8 @@ var handleNewMessage = (message) => {
 		newRoom[roomID].messages.push(message);
 		tapTalkRooms = mergeTaptalkRooms(newRoom, tapTalkRooms);
     }
+
+    module.exports.tapCoreRoomListManager.setRoomListLastMessage(message, 'new emit');
     
     //if delete room
 	if(message.action === 'room/delete' && message.type === CHAT_MESSAGE_TYPE_SYSTEM_MESSAGE) {
@@ -561,7 +564,9 @@ var handleUpdateMessage = (message) => {
 		for(let i in tapTalkRooms[message.room.roomID].messages) {
 			tapTalkRooms[message.room.roomID].messages[i].isRead = true;
 		}
-	}	
+    }	
+
+    module.exports.tapCoreRoomListManager.setRoomListLastMessage(message, 'update emit');
 }
 
 class TapMessageQueue {
@@ -970,6 +975,81 @@ exports.tapCoreRoomListManager = {
 		
 		return arrayMessage;
     },
+
+    setRoomListLastMessage : (message, action = null) =>{
+		var user = this.taptalk.getTaptalkActiveUser().userID;
+
+		let data = {
+			lastMessage: {},
+			unreadCount: 0
+		}
+
+		let unreadCounter = () => {
+			if(tapTalkRoomListHashmap[message.room.roomID]) {
+				let count = tapTalkRoomListHashmap[message.room.roomID].unreadCount;
+
+				if(!message.isRead) {
+					if(user !== message.user.userID) {
+						count = count + 1;
+					
+						tapTalkRoomListHashmap[message.room.roomID].unreadCount = count;
+					}
+				}else {
+					if(count !== 0) {
+						count = count - 1;
+						tapTalkRoomListHashmap[message.room.roomID].unreadCount = count;
+					}
+				}
+			}
+		}
+
+		if(!message.isHidden) {
+			//first load roomlist
+			if(action === null) {
+				if(!tapTalkRoomListHashmap[message.room.roomID]) { //if room list not exist
+					data.lastMessage = message;
+					data.unreadCount = (!message.isRead && user !== message.user.userID) ? 1 : 0;
+	
+					tapTalkRoomListHashmap[message.room.roomID] = data;
+				}else { //if room list exist
+					if(tapTalkRoomListHashmap[message.room.roomID].lastMessage.created < message.created) {
+						data.lastMessage = message;
+	
+						tapTalkRoomListHashmap[message.room.roomID].lastMessage = data.lastMessage;
+					}
+	
+					unreadCounter();
+				}
+			}
+			//first load roomlist
+
+			//new emit action
+			if(action === 'new emit') {
+				if(!tapTalkRoomListHashmap[message.room.roomID]) {
+					data.lastMessage = message;
+					data.unreadCount = (!message.isRead && user !== message.user.userID) ? 1 : 0;
+
+					tapTalkRoomListHashmap = Object.assign({[message.room.roomID] : data}, tapTalkRoomListHashmap);
+				}else {
+					// unreadCounter();
+					let temporaryRoomList = tapTalkRoomListHashmap[message.room.roomID];
+	
+					delete tapTalkRoomListHashmap[message.room.roomID];
+	
+					tapTalkRoomListHashmap = Object.assign({[message.room.roomID] : temporaryRoomList}, tapTalkRoomListHashmap);
+				}
+			}
+			//new emit action
+
+			//update emit action
+			if(action === 'update emit') {
+				tapTalkRoomListHashmap[message.room.roomID].lastMessage = message;
+
+				unreadCounter();
+			}
+			//update emit action
+		}
+	},
     
     getUpdatedRoomList : (callback) => {
         let url = `${baseApiUrl}/v1/chat/message/room_list_and_unread`;
@@ -1009,7 +1089,11 @@ exports.tapCoreRoomListManager = {
                                     if((tapTalkRooms[data[i].room.roomID]["messages"][findBodyIndex].data !== "") && !tapTalkRooms[data[i].room.roomID]["messages"][findBodyIndex].isDeleted) {
 										let messageIndex = tapTalkRooms[data[i].room.roomID]["messages"][findBodyIndex];
 										messageIndex.data = JSON.parse(decryptKey(messageIndex.data, messageIndex.localID));
-									}
+                                    }
+                                    
+                                    //room list action
+									_this.tapCoreRoomListManager.setRoomListLastMessage(data[i]);
+									//room list action
 								}else {
 									let findLocalID = tapTalkRooms[data[i].room.roomID]["messages"].findIndex(value => value.localID === data[i].localID);
 									
@@ -1024,12 +1108,15 @@ exports.tapCoreRoomListManager = {
                                     if(tapTalkRooms[data[i].room.roomID]["messages"][findBodyIndex].data !== "") {
 										let messageIndex = tapTalkRooms[data[i].room.roomID]["messages"][findBodyIndex];
 										messageIndex.data = JSON.parse(decryptKey(messageIndex.data, messageIndex.localID));
-									}
+                                    }
+                                    
+                                    //room list action
+                                    _this.tapCoreRoomListManager.setRoomListLastMessage(data[i]);
+									//room list action
 								}
-							}
-
-                            _this.tapCoreRoomListManager.getRoomListFromCache();
-                            callback.onSuccess(_this.tapCoreRoomListManager.getRoomListFromCache()); 
+                            }
+                            
+                            callback.onSuccess(tapTalkRoomListHashmap);
 						}else {
 							if(response.error.code === "40104") {
 								_this.taptalk.refreshAccessToken(() => _this.tapCoreRoomListManager.getUpdatedRoomList(callback))
@@ -1042,7 +1129,7 @@ exports.tapCoreRoomListManager = {
 						console.error('there was an error!', err);
 					});
 			}else {
-				callback.onSuccess(_this.tapCoreRoomListManager.getRoomListFromCache()); 
+				callback.onSuccess(tapTalkRoomListHashmap);
 			}
         }
     },
