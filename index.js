@@ -989,7 +989,7 @@ exports.tapCoreRoomListManager = {
 				let count = tapTalkRoomListHashmap[message.room.roomID].unreadCount;
 
 				if(!message.isRead) {
-					if(user !== message.user.userID) {
+					if((user !== message.user.userID)) {
 						count = count + 1;
 					
 						tapTalkRoomListHashmap[message.room.roomID].unreadCount = count;
@@ -999,7 +999,7 @@ exports.tapCoreRoomListManager = {
 						count = count - 1;
 						tapTalkRoomListHashmap[message.room.roomID].unreadCount = count;
 					}
-				}
+                }
 			}
 		}
 
@@ -1017,7 +1017,7 @@ exports.tapCoreRoomListManager = {
 	
 						tapTalkRoomListHashmap[message.room.roomID].lastMessage = data.lastMessage;
 					}
-	
+
 					unreadCounter();
 				}
 			}
@@ -1031,7 +1031,7 @@ exports.tapCoreRoomListManager = {
 
 					tapTalkRoomListHashmap = Object.assign({[message.room.roomID] : data}, tapTalkRoomListHashmap);
 				}else {
-					// unreadCounter();
+					unreadCounter();
                     let temporaryRoomList = tapTalkRoomListHashmap[message.room.roomID];
                     
                     if((temporaryRoomList.lastMessage.created === message.created) || (temporaryRoomList.lastMessage.created < message.created)) {
@@ -1050,8 +1050,10 @@ exports.tapCoreRoomListManager = {
 				if((tapTalkRoomListHashmap[message.room.roomID].lastMessage.created === message.created)) {
 					tapTalkRoomListHashmap[message.room.roomID].lastMessage = message;
 				}
-
-				unreadCounter();
+                
+				if(message.isRead) {
+					unreadCounter();
+				}
 			}
 			//update emit action
 		}
