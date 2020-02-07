@@ -1033,7 +1033,10 @@ exports.tapCoreRoomListManager = {
 				}else {
 					// unreadCounter();
                     let temporaryRoomList = tapTalkRoomListHashmap[message.room.roomID];
-                    temporaryRoomList.lastMessage = message;
+                    
+                    if((temporaryRoomList.lastMessage.created === message.created) || (temporaryRoomList.lastMessage.created < message.created)) {
+						temporaryRoomList.lastMessage = message;
+					}
 	
 					delete tapTalkRoomListHashmap[message.room.roomID];
 	
@@ -1044,7 +1047,9 @@ exports.tapCoreRoomListManager = {
 
 			//update emit action
 			if(action === 'update emit') {
-				tapTalkRoomListHashmap[message.room.roomID].lastMessage = message;
+				if((tapTalkRoomListHashmap[message.room.roomID].lastMessage.created === message.created)) {
+					tapTalkRoomListHashmap[message.room.roomID].lastMessage = message;
+				}
 
 				unreadCounter();
 			}
