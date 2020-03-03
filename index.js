@@ -606,6 +606,40 @@ tapMsgQueue.setCallback((emit) => {
     tapReader.readAsText(emit);
 });
 
+class TapEmitMessageQueue {
+	constructor() {
+		this.emitQueue = [];
+		this.isRunningMessageQueue = false;
+	}
+
+	runEmitQueue() {
+		if(!navigator.onLine) {
+			this.isRunningMessageQueue = false;
+		}else {
+			this.isRunningMessageQueue = true;
+		}
+
+		if(this.emitQueue.length > 0 && this.isRunningMessageQueue) {
+			webSocket.send(this.emitQueue[0]);
+			this.emitQueue.shift();
+			this.runEmitQueue();
+		}else {
+			this.isRunningMessageQueue = false;
+			return;
+		}
+	}
+
+	pushEmitQueue(emit) {
+		this.emitQueue.push(emit);
+
+		if(!this.isRunningMessageQueue) {
+			this.runEmitQueue();
+		}
+	}
+}
+
+var tapEmitMsgQueue = new TapEmitMessageQueue();
+
 //image compress
 let compressImageFile = (file, widthVal, heightVal) => {
     return new Promise(function (resolve, reject) {;
@@ -734,7 +768,8 @@ exports.taptalk = {
                     webSocket = new WebSocket(url);
         
                     webSocket.onopen = function () {
-                        callback.onSuccess('Successfully connected to TapTalk.io server');  
+                        callback.onSuccess('Successfully connected to TapTalk.io server');
+                        tapEmitMsgQueue.runEmitQueue();	
                     }
                     webSocket.onclose = function () {
                         callback.onClose('Disconnected from TapTalk.io server');  
@@ -1679,13 +1714,7 @@ exports.tapCoreMessageManager  = {
 		MESSAGE_MODEL["data"] = generateData();
 		
 		//set room model
-		MESSAGE_MODEL["room"]["roomID"] = room.roomID;
-		MESSAGE_MODEL["room"]["name"] = room.name;
-		MESSAGE_MODEL["room"]["type"] = room.type;
-		MESSAGE_MODEL["room"]["imageURL"] = room.imageURL;
-		MESSAGE_MODEL["room"]["color"] = room.color;
-		MESSAGE_MODEL["room"]["deleted"] = room.deleted;
-		MESSAGE_MODEL["room"]["isDeleted"] = room.isDeleted;
+		MESSAGE_MODEL["room"] = room;
 		//end of set room model
         
         this.tapCoreMessageManager.constructMessageStatus(true, false, false, false);
@@ -1725,7 +1754,15 @@ exports.tapCoreMessageManager  = {
                 data: MESSAGE_MODEL
             };
             
-            webSocket.send(JSON.stringify(emitData));
+            tapEmitMsgQueue.pushEmitQueue(JSON.stringify(emitData));
+
+            let _message = {...MESSAGE_MODEL};
+
+			_message.body = messageBody;
+
+			tapTalkRoomListHashmap[_message.room.roomID].lastMessage = _message;
+
+			tapTalkRooms[_message.room.roomID].messages[_message.localID] = _message;
 
             callback(emitData);
         }
@@ -1740,7 +1777,7 @@ exports.tapCoreMessageManager  = {
                 data: MESSAGE_MODEL
             };
             
-            webSocket.send(JSON.stringify(emitData));
+            tapEmitMsgQueue.pushEmitQueue(JSON.stringify(emitData));
         }
     },
 
@@ -1762,7 +1799,7 @@ exports.tapCoreMessageManager  = {
                 data: MESSAGE_MODEL
             };
             
-            webSocket.send(JSON.stringify(emitData));
+            tapEmitMsgQueue.pushEmitQueue(JSON.stringify(emitData));
         }
     },
 
@@ -1784,7 +1821,7 @@ exports.tapCoreMessageManager  = {
                 data: MESSAGE_MODEL
             };
             
-            webSocket.send(JSON.stringify(emitData));
+            tapEmitMsgQueue.pushEmitQueue(JSON.stringify(emitData));
         }
     },
 
@@ -1911,7 +1948,7 @@ exports.tapCoreMessageManager  = {
 								data: MESSAGE_MODEL
 							};
 		
-                            webSocket.send(JSON.stringify(emitData));
+                            tapEmitMsgQueue.pushEmitQueue(JSON.stringify(emitData));
                             
                             emitData.data.body = decryptKey(emitData.data.body, emitData.data.localID);
 						    emitData.data.data = JSON.parse(decryptKey(emitData.data.data, emitData.data.localID));
@@ -1953,7 +1990,7 @@ exports.tapCoreMessageManager  = {
                     data: MESSAGE_MODEL
                 };
                 
-                webSocket.send(JSON.stringify(emitData));
+                tapEmitMsgQueue.pushEmitQueue(JSON.stringify(emitData));
             }else {
                 console.log(error);
             }
@@ -2049,7 +2086,7 @@ exports.tapCoreMessageManager  = {
 								data: MESSAGE_MODEL
 							};
 		
-                            webSocket.send(JSON.stringify(emitData));
+                            tapEmitMsgQueue.pushEmitQueue(JSON.stringify(emitData));
                             
                             emitData.data.body = decryptKey(emitData.data.body, emitData.data.localID);
 						    emitData.data.data = JSON.parse(decryptKey(emitData.data.data, emitData.data.localID));
@@ -2091,7 +2128,7 @@ exports.tapCoreMessageManager  = {
                     data: MESSAGE_MODEL
                 };
                 
-                webSocket.send(JSON.stringify(emitData));
+                tapEmitMsgQueue.pushEmitQueue(JSON.stringify(emitData));
             }else {
                 console.log(error);
             }
@@ -2145,7 +2182,7 @@ exports.tapCoreMessageManager  = {
                             data: MESSAGE_MODEL
                         };
 
-                        webSocket.send(JSON.stringify(emitData));
+                        tapEmitMsgQueue.pushEmitQueue(JSON.stringify(emitData));
 
                         emitData.data.body = decryptKey(emitData.data.body, emitData.data.localID);
 						emitData.data.data = JSON.parse(decryptKey(emitData.data.data, emitData.data.localID));
@@ -2186,7 +2223,7 @@ exports.tapCoreMessageManager  = {
                     data: MESSAGE_MODEL
                 };
                 
-                webSocket.send(JSON.stringify(emitData));
+                tapEmitMsgQueue.pushEmitQueue(JSON.stringify(emitData));
             }else {
                 console.log(error);
             }
@@ -2309,9 +2346,9 @@ exports.tapCoreMessageManager  = {
 							if(minCreatedTimestamp === null) {
 								var currentRoomMessages = tapTalkRooms[roomID].messages;
 								
-								Object.keys(currentRoomMessages).map(i => {
-									currentRoomMessages[i].body = encryptKey(currentRoomMessages[i].body, currentRoomMessages[i].localID);
-								});
+								// Object.keys(currentRoomMessages).map(i => {
+								// 	currentRoomMessages[i].body = encryptKey(currentRoomMessages[i].body, currentRoomMessages[i].localID);
+								// });
 								
 								let responseMessage = response.data.messages.reverse();
 
@@ -2806,4 +2843,3 @@ function decrypt(text, key) {
 
       return decryptedString
   }
-
