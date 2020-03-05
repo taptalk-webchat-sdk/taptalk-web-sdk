@@ -1078,7 +1078,7 @@ exports.tapCoreRoomListManager = {
 
 			//update emit action
 			if(action === 'update emit') {
-				if((tapTalkRoomListHashmap[message.room.roomID].lastMessage.created === message.created)) {
+				if((tapTalkRoomListHashmap[message.room.roomID].lastMessage.localID === message.localID)) {
 					tapTalkRoomListHashmap[message.room.roomID].lastMessage = message;
 				}
                 
