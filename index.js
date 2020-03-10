@@ -10,6 +10,7 @@ var taptalkContact = {};
 var tapTalkRandomColors = ['#f99181', '#a914db', '#f26046', '#fb76ab', '#c4c9d1', '#4239be', '#9c89f1', '#f4c22c'];
 var projectConfigs = null;
 var expiredKey = [];
+var refreshAccessTokenCallbackArray = [];
 
 var db;
 window.indexedDB = window.indexedDB || window.mozIndexedDB || window.webkitIndexedDB || window.msIndexedDB;
@@ -800,32 +801,48 @@ exports.taptalk = {
     },
 
     refreshAccessToken : (callback) => {
+        let runCallbackRefreshToken = () => {
+            if(refreshAccessTokenCallbackArray.length > 0) {
+                refreshAccessTokenCallbackArray[0]();
+                refreshAccessTokenCallbackArray.shift();
+				runCallbackRefreshToken();
+			}else {
+				return;
+			}
+		};
+
+        refreshAccessTokenCallbackArray.push(callback);
+        
         if(this.taptalk.isAuthenticated()) {
-            let url = `${baseApiUrl}/v1/auth/access_token/refresh`;
+            if(refreshAccessTokenCallbackArray.length < 2) {
+                let url = `${baseApiUrl}/v1/auth/access_token/refresh`;
 
-            setTimeout(() => {
-                authenticationHeader["Authorization"] = `Bearer ${getLocalStorageObject('TapTalk.UserData').refreshToken}`;
+                setTimeout(() => {
+                    authenticationHeader["Authorization"] = `Bearer ${getLocalStorageObject('TapTalk.UserData').refreshToken}`;
 
-                doXMLHTTPRequest('POST', authenticationHeader, url, "")
-                    .then(function (response) {
-                        if(response.error.code === "") {
-                            setUserDataStorage(response.data);
+                    doXMLHTTPRequest('POST', authenticationHeader, url, "")
+                        .then(function (response) {
+                            if(response.error.code === "") {
+                                setUserDataStorage(response.data);
 
-                            callback();
-                        }else {
-                            for(let i  in tapListener) {
-								Object.keys(tapListener[i]).map((callback) => {
-									if(callback === 'onTapTalkRefreshTokenExpired') {
-										tapListener[i][callback]();
-									}
-								})
-							}
-                        } 
-                    })
-                    .catch(function (err) {
-                        console.error('there was an error!', err);
-                    });
-            }, 300);
+                                runCallbackRefreshToken();
+                            }else {
+                                refreshAccessTokenCallbackArray = [];
+                                
+                                for(let i  in tapListener) {
+                                    Object.keys(tapListener[i]).map((callback) => {
+                                        if(callback === 'onTapTalkRefreshTokenExpired') {
+                                            tapListener[i][callback]();
+                                        }
+                                    })
+                                }
+                            } 
+                        })
+                        .catch(function (err) {
+                            console.error('there was an error!', err);
+                        });
+                }, 300);
+            }
         }else {
             return;
         }
