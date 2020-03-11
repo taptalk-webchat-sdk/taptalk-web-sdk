@@ -11,6 +11,7 @@ var tapTalkRandomColors = ['#f99181', '#a914db', '#f26046', '#fb76ab', '#c4c9d1'
 var projectConfigs = null;
 var expiredKey = [];
 var refreshAccessTokenCallbackArray = [];
+var isConnectRunning = false;
 
 var db;
 window.indexedDB = window.indexedDB || window.mozIndexedDB || window.webkitIndexedDB || window.msIndexedDB;
@@ -761,35 +762,43 @@ exports.taptalk = {
     },
 
     connect : (callback) => {
-        this.taptalk.testAccessToken({
-            onSuccess: () => {
-                if (window["WebSocket"]) {
-                    authenticationHeader["Authorization"] = `Bearer ${getLocalStorageObject('TapTalk.UserData').accessToken}`;
-                    var url = `wss://${baseApiUrl.replace('https://', '')}/connect?${generateHeaderQuerystring()}`;
-                    webSocket = new WebSocket(url);
-        
-                    webSocket.onopen = function () {
-                        callback.onSuccess('Successfully connected to TapTalk.io server');
-                        tapEmitMsgQueue.runEmitQueue();	
+        if(!isConnectRunning) {
+            isConnectRunning = true;
+            
+            this.taptalk.testAccessToken({
+                onSuccess: () => {
+                    if (window["WebSocket"]) {
+                        authenticationHeader["Authorization"] = `Bearer ${getLocalStorageObject('TapTalk.UserData').accessToken}`;
+                        var url = `wss://${baseApiUrl.replace('https://', '')}/connect?${generateHeaderQuerystring()}`;
+                        webSocket = new WebSocket(url);
+            
+                        webSocket.onopen = function () {
+                            callback.onSuccess('Successfully connected to TapTalk.io server');
+                            tapEmitMsgQueue.runEmitQueue();	
+                        }
+                        webSocket.onclose = function () {
+                            callback.onClose('Disconnected from TapTalk.io server');  
+                        };
+                        webSocket.onerror = function () {
+                            callback.onError('Error while connecting to web socket');
+                        }
+                        webSocket.onmessage = function (evt) {
+                            tapMsgQueue.addToQueue(evt.data);
+                        };
+
+                        isConnectRunning = false;
+                    } else {
+                        isConnectRunning = false;
+                        alert("Your browser does not support WebSockets.");
+                        callback(null, 'cannot connect to websocket');
                     }
-                    webSocket.onclose = function () {
-                        callback.onClose('Disconnected from TapTalk.io server');  
-                    };
-                    webSocket.onerror = function () {
-                        callback.onError('Error while connecting to web socket');
-                    }
-                    webSocket.onmessage = function (evt) {
-                        tapMsgQueue.addToQueue(evt.data);
-                    };
-                } else {
-                    alert("Your browser does not support WebSockets.");
-                    callback(null, 'cannot connect to websocket');
+                },
+                onError: (errorCode, errorMessage) => {
+                    isConnectRunning = false;
+                    callback.onError((errorCode, errorMessage));
                 }
-            },
-            onError: (errorCode, errorMessage) => {
-                callback.onError((errorCode, errorMessage));
-            }
-        })
+            })
+        }
     },
 
     disconnect : () => {
