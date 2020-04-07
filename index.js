@@ -12,6 +12,8 @@ var projectConfigs = null;
 var expiredKey = [];
 var refreshAccessTokenCallbackArray = [];
 var isConnectRunning = false;
+var isDoneFirstSetupRoomList = false;
+var isNeedToCallApiUpdateRoomList = true;
 
 var db;
 window.indexedDB = window.indexedDB || window.mozIndexedDB || window.webkitIndexedDB || window.msIndexedDB;
@@ -126,6 +128,12 @@ const ROOM_TYPE = {
 }
 
 const KEY_PASSWORD_ENCRYPTOR = "kHT0sVGIKKpnlJE5BNkINYtuf19u6+Kk811iMuWQ5tM";
+
+//listen connection status
+window.addEventListener('offline', function() {
+	isNeedToCallApiUpdateRoomList = true;
+});
+//listen connection status
 
 function getDeviceID() {
 	let localDeviceID = localStorage.getItem('tapTalk.DeviceID');
@@ -419,153 +427,324 @@ function isFileAllowed(fileType, file) {
     return fileTypeAllowed;
 }
 
+class TapTalkWebWorker {
+	constructor(worker) {
+		const code = worker.toString();
+		const blob = new Blob(["(" + code + ")()"]);
+		return new Worker(URL.createObjectURL(blob));
+	}
+}
+
+//start of web worker emit listener
+var tapLiveWorkerHandleEmitListener = new TapTalkWebWorker(() => {
+	self.addEventListener('message', e => {
+        let _this = this;
+
+		let handleUpdateMessage = (message, rooms) => {
+			let _rooms = rooms;
+
+			_rooms[message.room.roomID].messages[message.localID] = message;
+			
+			if(message.isRead) {
+				for(var i in _rooms[message.room.roomID].messages) {
+					_rooms[message.room.roomID].messages[i].isRead = true;
+				}
+			}
+
+			// tapCoreRoomListManager.setRoomListLastMessage(message, 'update emit');
+
+			_this.postMessage({
+				type: 'update',
+				message: message,
+				tapTalkRooms: _rooms
+			})
+		}
+
+		let handleNewMessage = (activeUser, message, rooms) => {
+			let _rooms = rooms;
+			let markMessageAsDelivered = false;
+			let user = activeUser;
+			let isRoomExist = _rooms[message.room.roomID];
+
+			let removeRoom = (rooms, roomID) => {
+				delete rooms[roomID];
+				return rooms;
+			}
+		
+			let mergeTaptalkRooms = (obj, src) => {
+				for (var key in src) {
+					if (src.hasOwnProperty(key)) obj[key] = src[key];
+				}
+				return obj;
+			}
+		
+			if(user.userID !== message.user.userID) {
+				markMessageAsDelivered = true;
+				// tapCoreMessageManager.markMessageAsDelivered([message.messageID]);
+			}
+		
+			if(isRoomExist) {
+				if(!isRoomExist[message.localID]) {
+					let messsageLocalID = message.localID;
+					let messageRoomID = message.room.roomID;
+					// _rooms[message.room.roomID].messages = Object.assign({[message.localID] : message}, _rooms[message.room.roomID].messages);
+					_rooms[message.room.roomID].messages = {[messsageLocalID]: message, ..._rooms[message.room.roomID].messages};
+		
+					let currentIndex = _rooms[message.room.roomID];
+					
+					delete _rooms[message.room.roomID];
+
+					// _rooms = Object.assign({[message.room.roomID] : currentIndex}, _rooms);
+					_rooms = {[messageRoomID]: currentIndex, ..._rooms}
+
+				}
+			}else {
+				let roomID = message.room.roomID;
+		
+				let newRoom = {
+					[roomID]: {
+						messages: {},
+						hasMore: true,
+						lastUpdated: 0
+					}
+				}
+		
+				newRoom[roomID].messages[message.localID] = message;
+				_rooms = mergeTaptalkRooms(newRoom, _rooms);
+			}
+		
+			// tapCoreRoomListManager.setRoomListLastMessage(message, 'new emit');
+		
+			//if delete room
+			if(message.action === 'room/delete' && message.type === 9001) {
+				_rooms = removeRoom(message.room.roomID);
+			}
+		
+			//if leave group
+			if((message.action === 'room/leave' && message.type === 9001) && taptalk.getTaptalkActiveUser().userID === message.user.userID) {
+				_rooms = removeRoom(message.room.roomID);
+			}
+
+			_this.postMessage({
+				type: 'new',
+				markMessageAsDelivered: markMessageAsDelivered,
+				message: message,
+				tapTalkRooms: _rooms
+			})
+		}
+
+		let handleEmit = (emit) => {
+			switch(emit.eventName) {
+				case "chat/sendMessage":
+					handleNewMessage(e.data.activeUser, e.data.message, e.data.tapTalkRooms)
+					break;
+		
+				case "chat/updateMessage":
+					handleUpdateMessage(e.data.message, e.data.tapTalkRooms)
+					break;
+			}
+		}
+
+		handleEmit(e.data);
+	})
+});
+
+tapLiveWorkerHandleEmitListener.addEventListener('message', e => {
+	switch(e.data.type) {
+		case 'new':
+			if(e.data.markMessageAsDelivered) {
+				module.exports.tapCoreMessageManager.markMessageAsDelivered([e.data.message.messageID]);
+			}
+
+			tapTalkRooms = e.data.tapTalkRooms;
+			module.exports.tapCoreRoomListManager.setRoomListLastMessage(e.data.message, 'new emit');
+
+			for(var i in tapMessageListeners) {
+				tapMessageListeners[i].onReceiveNewMessage(e.data.message);
+			}
+
+			break;
+		case 'update':
+			tapTalkRooms = e.data.tapTalkRooms;
+			module.exports.tapCoreRoomListManager.setRoomListLastMessage(e.data.message, 'update emit');
+
+			for(var i in tapMessageListeners) {
+				tapMessageListeners[i].onReceiveUpdateMessage(e.data.message);
+			}
+
+			break;
+	}
+});
+//end of web worker emit listener
+
 var tapReader = new FileReader();
 
 tapReader.onload = function () {
 	var messages = this.result.split('\n');
 	for (let i in messages) {
-      var m = JSON.parse(messages[i]);
+        var m = JSON.parse(messages[i]);
       
-      handleEmit(m);
+        //   handleEmit(m);
+        
+		if(m.eventName === 'chat/sendMessage' || m.eventName === 'chat/updateMessage') {
+            //start of decrypting all of encrypted content
+			m.data.body = decryptKey(m.data.body, m.data.localID);
+
+			if(m.data.data !== "") {
+				m.data.data = JSON.parse(decryptKey(m.data.data, m.data.localID));
+			}
+
+			if(m.data.replyTo.localID !== "") {
+				m.data.quote.content = decryptKey(m.data.quote.content, m.data.localID);
+			}
+			//end of decrypting all of encrypted content
+			
+			tapLiveWorkerHandleEmitListener.postMessage({
+				activeUser: module.exports.taptalk.getTaptalkActiveUser(),
+				eventName: m.eventName,
+				message: m.data,
+				tapTalkRooms: tapTalkRooms
+			})
+		}
 	 
-      switch(m.eventName) {
-        case "chat/sendMessage":
-            for(let i in tapMessageListeners) {
-                tapMessageListeners[i].onReceiveNewMessage(m.data);
-            }
-            break;
+        switch(m.eventName) {
+            // case "chat/sendMessage":
+            //     for(let i in tapMessageListeners) {
+            //         tapMessageListeners[i].onReceiveNewMessage(m.data);
+            //     }
+            //     break;
 
-        case "chat/updateMessage":
-            for(let i in tapMessageListeners) {
-                tapMessageListeners[i].onReceiveUpdateMessage(m.data);
-            }
-            break;
+            // case "chat/updateMessage":
+            //     for(let i in tapMessageListeners) {
+            //         tapMessageListeners[i].onReceiveUpdateMessage(m.data);
+            //     }
+            //     break;
 
-        case "chat/startTyping":
-            for(let i in tapRoomStatusListeners) {
-                tapRoomStatusListeners[i].onReceiveStartTyping(m.data.roomID, m.data.user);
-            }
-            break;
+            case "chat/startTyping":
+                for(let i in tapRoomStatusListeners) {
+                    tapRoomStatusListeners[i].onReceiveStartTyping(m.data.roomID, m.data.user);
+                }
+                break;
 
-        case "chat/stopTyping":
-            for(let i in tapRoomStatusListeners) {
-                tapRoomStatusListeners[i].onReceiveStopTyping(m.data.roomID, m.data.user);
-            }
-            break;
+            case "chat/stopTyping":
+                for(let i in tapRoomStatusListeners) {
+                    tapRoomStatusListeners[i].onReceiveStopTyping(m.data.roomID, m.data.user);
+                }
+                break;
 
-        case "user/status":
-            for(let i in tapRoomStatusListeners) {
-                tapRoomStatusListeners[i].onReceiveOnlineStatus(m.data.user, m.data.isOnline, m.data.lastActive);
-            }
-            break;
-      }
+            case "user/status":
+                for(let i in tapRoomStatusListeners) {
+                    tapRoomStatusListeners[i].onReceiveOnlineStatus(m.data.user, m.data.isOnline, m.data.lastActive);
+                }
+                break;
+        }
     }
-    
+        
     tapMsgQueue.processNext();
 };
 
-function handleEmit(emit) {
-	switch(emit.eventName) {
-		case "chat/sendMessage":
-				handleNewMessage(emit.data)
-				break;
+// function handleEmit(emit) {
+// 	switch(emit.eventName) {
+// 		case "chat/sendMessage":
+// 				handleNewMessage(emit.data)
+// 				break;
 
-		case "chat/updateMessage":
-				handleUpdateMessage(emit.data);
-			break;
-	}
-}
+// 		case "chat/updateMessage":
+// 				handleUpdateMessage(emit.data);
+// 			break;
+// 	}
+// }
 
-var handleNewMessage = (message) => {
-    let _this = this;
-    let user = this.taptalk.getTaptalkActiveUser();
+// var handleNewMessage = (message) => {
+//     let _this = this;
+//     let user = this.taptalk.getTaptalkActiveUser();
 
-    let removeRoom = (roomID) => {
-		delete tapTalkRooms[roomID];
-	}
+//     let removeRoom = (roomID) => {
+// 		delete tapTalkRooms[roomID];
+// 	}
     
-    let mergeTaptalkRooms = (obj, src) => {
-		for (var key in src) {
-			if (src.hasOwnProperty(key)) obj[key] = src[key];
-		}
-		return obj;
-	}
+//     let mergeTaptalkRooms = (obj, src) => {
+// 		for (var key in src) {
+// 			if (src.hasOwnProperty(key)) obj[key] = src[key];
+// 		}
+// 		return obj;
+// 	}
 	
-	if(user.userID !== message.user.userID) {
-		this.tapCoreMessageManager.markMessageAsDelivered([message.messageID]);
-	}
+// 	if(user.userID !== message.user.userID) {
+// 		this.tapCoreMessageManager.markMessageAsDelivered([message.messageID]);
+// 	}
 
-	message.body = decryptKey(message.body, message.localID);
+// 	message.body = decryptKey(message.body, message.localID);
 
-	if(message.data !== "") {
-		message.data = JSON.parse(decryptKey(message.data, message.localID));
-    }
+// 	if(message.data !== "") {
+// 		message.data = JSON.parse(decryptKey(message.data, message.localID));
+//     }
     
-    if(message.replyTo.localID !== "") {
-		message.quote.content = decryptKey(message.quote.content, message.localID);
-	}
+//     if(message.replyTo.localID !== "") {
+// 		message.quote.content = decryptKey(message.quote.content, message.localID);
+// 	}
 
-	let isRoomExist = tapTalkRooms[message.room.roomID];
+// 	let isRoomExist = tapTalkRooms[message.room.roomID];
 	
-	if(isRoomExist) {
-		if(!isRoomExist[message.localID]) {
-			tapTalkRooms[message.room.roomID].messages = Object.assign({[message.localID] : message}, tapTalkRooms[message.room.roomID].messages);
+// 	if(isRoomExist) {
+// 		if(!isRoomExist[message.localID]) {
+// 			tapTalkRooms[message.room.roomID].messages = Object.assign({[message.localID] : message}, tapTalkRooms[message.room.roomID].messages);
 
-			var currentIndex = tapTalkRooms[message.room.roomID];
+// 			var currentIndex = tapTalkRooms[message.room.roomID];
 
-			delete tapTalkRooms[message.room.roomID];
+// 			delete tapTalkRooms[message.room.roomID];
 
-			tapTalkRooms = Object.assign({[message.room.roomID] : currentIndex}, tapTalkRooms);
-		}
-	}else {
-		var roomID = message.room.roomID;
+// 			tapTalkRooms = Object.assign({[message.room.roomID] : currentIndex}, tapTalkRooms);
+// 		}
+// 	}else {
+// 		var roomID = message.room.roomID;
 
-		var newRoom = {
-			[roomID]: {
-				messages: {},
-				hasMore: true,
-				lastUpdated: 0
-			}
-		}
+// 		var newRoom = {
+// 			[roomID]: {
+// 				messages: {},
+// 				hasMore: true,
+// 				lastUpdated: 0
+// 			}
+// 		}
 
-		newRoom[roomID].messages[message.localID] = message;
-		tapTalkRooms = mergeTaptalkRooms(newRoom, tapTalkRooms);
-	}
+// 		newRoom[roomID].messages[message.localID] = message;
+// 		tapTalkRooms = mergeTaptalkRooms(newRoom, tapTalkRooms);
+// 	}
 
-    module.exports.tapCoreRoomListManager.setRoomListLastMessage(message, 'new emit');
+//     module.exports.tapCoreRoomListManager.setRoomListLastMessage(message, 'new emit');
     
-    //if delete room
-	if(message.action === 'room/delete' && message.type === CHAT_MESSAGE_TYPE_SYSTEM_MESSAGE) {
-		removeRoom(message.room.roomID);
-    }
+//     //if delete room
+// 	if(message.action === 'room/delete' && message.type === CHAT_MESSAGE_TYPE_SYSTEM_MESSAGE) {
+// 		removeRoom(message.room.roomID);
+//     }
     
-    //if leave group
-	if((message.action === 'room/leave' && message.type === 9001) && module.exports.taptalk.getTaptalkActiveUser().userID === message.user.userID) {
-		removeRoom(message.room.roomID);
-	}
-}
+//     //if leave group
+// 	if((message.action === 'room/leave' && message.type === 9001) && module.exports.taptalk.getTaptalkActiveUser().userID === message.user.userID) {
+// 		removeRoom(message.room.roomID);
+// 	}
+// }
 
-var handleUpdateMessage = (message) => {
-	message.body = decryptKey(message.body, message.localID);
+// var handleUpdateMessage = (message) => {
+// 	message.body = decryptKey(message.body, message.localID);
 
-	if(message.data !== "") {
-		message.data = JSON.parse(decryptKey(message.data, message.localID));
-    }
+// 	if(message.data !== "") {
+// 		message.data = JSON.parse(decryptKey(message.data, message.localID));
+//     }
     
-    if(message.replyTo.localID !== "") {
-		message.quote.content = decryptKey(message.quote.content, message.localID);
-	}
+//     if(message.replyTo.localID !== "") {
+// 		message.quote.content = decryptKey(message.quote.content, message.localID);
+// 	}
 
-    tapTalkRooms[message.room.roomID].messages[message.localID] = message;
+//     tapTalkRooms[message.room.roomID].messages[message.localID] = message;
 	
-	if(message.isRead) {
-		for(var i in tapTalkRooms[message.room.roomID].messages) {
-			tapTalkRooms[message.room.roomID].messages[i].isRead = true;
-		}
-	}
+// 	if(message.isRead) {
+// 		for(var i in tapTalkRooms[message.room.roomID].messages) {
+// 			tapTalkRooms[message.room.roomID].messages[i].isRead = true;
+// 		}
+// 	}
 
-	module.exports.tapCoreRoomListManager.setRoomListLastMessage(message, 'update emit');
-}
+// 	module.exports.tapCoreRoomListManager.setRoomListLastMessage(message, 'update emit');
+// }
 
 class TapMessageQueue {
     constructor() {
@@ -1033,7 +1212,7 @@ exports.tapCoreRoomListManager = {
 		return arrayMessage;
     },
 
-    setRoomListLastMessage : (message, action = null) =>{
+    setRoomListLastMessage: (message, action = null) => {
 		var user = this.taptalk.getTaptalkActiveUser().userID;
 
 		let data = {
@@ -1047,14 +1226,18 @@ exports.tapCoreRoomListManager = {
 
 				if(!message.isRead) {
 					if((user !== message.user.userID)) {
-						count = count + 1;
-					
-						tapTalkRoomListHashmap[message.room.roomID].unreadCount = count;
+                        if(!tapTalkRooms[message.room.roomID][message.localID]) {
+                            count = count + 1;
+                        
+                            tapTalkRoomListHashmap[message.room.roomID].unreadCount = count;
+                        }
 					}
 				}else {
 					if(count !== 0) {
-						count = count - 1;
-						tapTalkRoomListHashmap[message.room.roomID].unreadCount = count;
+                        if(!tapTalkRooms[message.room.roomID][message.localID]) {
+						    count = count - 1;
+                            tapTalkRoomListHashmap[message.room.roomID].unreadCount = count;
+                        }
 					}
                 }
 			}
@@ -1091,7 +1274,7 @@ exports.tapCoreRoomListManager = {
 					unreadCounter();
                     let temporaryRoomList = tapTalkRoomListHashmap[message.room.roomID];
                     
-                    if((temporaryRoomList.lastMessage.created === message.created) || (temporaryRoomList.lastMessage.created < message.created)) {
+                    if((temporaryRoomList.lastMessage.created !== message.created)) {
 						temporaryRoomList.lastMessage = message;
 					}
 	
@@ -1114,9 +1297,67 @@ exports.tapCoreRoomListManager = {
 			}
 			//update emit action
 		}
+    },
+    
+    updateRoomsExist: (message) => {
+		let decryptedMessage = decryptKey(message.body, message.localID);
+
+		if(!tapTalkRooms[message.room.roomID]["messages"].localID) {
+			tapTalkRooms[message.room.roomID]["messages"][message.localID] = message;
+		}
+		
+		let _localIDNewMessage = tapTalkRooms[message.room.roomID]["messages"][message.localID];
+
+		_localIDNewMessage.body = decryptedMessage;
+
+		if(_localIDNewMessage.data !== "") {
+			_localIDNewMessage.data = JSON.parse(decryptKey(_localIDNewMessage.data, _localIDNewMessage.localID));
+		}
+
+		//room list action
+		this.tapCoreRoomListManager.setRoomListLastMessage(message);
+		//room list action
+	},
+
+	updateRoomsNotExist: (message) => {
+		let decryptedMessage = decryptKey(message.body, message.localID);
+
+		tapTalkRooms[message.room.roomID] = {};
+
+		tapTalkRooms[message.room.roomID]["messages"] = {};
+		tapTalkRooms[message.room.roomID]["hasMore"] = true;
+		tapTalkRooms[message.room.roomID]["lastUpdated"] = 0;
+
+		if(!tapTalkRooms[message.room.roomID]["messages"][message.localID]) {
+			tapTalkRooms[message.room.roomID]["messages"][message.localID] = message;
+		}
+		
+		let localIDNewMessage = tapTalkRooms[message.room.roomID]["messages"][message.localID];
+
+		localIDNewMessage.body = decryptedMessage;
+
+		if((localIDNewMessage.data !== "") && !localIDNewMessage.isDeleted) {
+			localIDNewMessage.data = JSON.parse(decryptKey(localIDNewMessage.data, localIDNewMessage.localID));
+		}
+
+		//room list action
+		this.tapCoreRoomListManager.setRoomListLastMessage(message);
+		//room list action
+    },
+    
+    getUpdatedRoomList: (callback) => {
+		if(!isDoneFirstSetupRoomList) {
+			this.tapCoreRoomListManager.getRoomListAndRead(callback)
+		}else {
+			if(isDoneFirstSetupRoomList && !isNeedToCallApiUpdateRoomList) {
+				this.tapCoreRoomListManager.getRoomListAndRead(callback)
+			}else {
+				this.tapCoreRoomListManager.getRoomNewAndUpdated(callback)
+			}
+		}
 	},
     
-    getUpdatedRoomList : (callback) => {
+    getRoomListAndRead: (callback) => {
         let url = `${baseApiUrl}/v1/chat/message/room_list_and_unread`;
 		let _this = this;
 		let user = this.taptalk.getTaptalkActiveUser().userID;
@@ -1132,53 +1373,20 @@ exports.tapCoreRoomListManager = {
 							let data = response.data.messages;
 							
 							for(let i in data) {
-								let decryptedMessage = decryptKey(data[i].body, data[i].localID);
-
-								if(!tapTalkRooms[data[i].room.roomID]) { //if rooms not exist in rooms array
-									tapTalkRooms[data[i].room.roomID] = {};
-
-									tapTalkRooms[data[i].room.roomID]["messages"] = [];
-                                    tapTalkRooms[data[i].room.roomID]["hasMore"] = true;
-                                    tapTalkRooms[data[i].room.roomID]["lastUpdated"] = 0;
-
-                                    if(!tapTalkRooms[data[i].room.roomID]["messages"][data[i].localID]) {
-										tapTalkRooms[data[i].room.roomID]["messages"][data[i].localID] = data[i];
-									}
-									
-									let localIDNewMessage = tapTalkRooms[data[i].room.roomID]["messages"][data[i].localID];
-
-									localIDNewMessage.body = decryptedMessage;
-
-									if((localIDNewMessage.data !== "") && !localIDNewMessage.isDeleted) {
-										localIDNewMessage.data = JSON.parse(decryptKey(localIDNewMessage.data, localIDNewMessage.localID));
-									}
-
-									//room list action
-									_this.tapCoreRoomListManager.setRoomListLastMessage(data[i]);
-									//room list action
+								if(!tapTalkRooms[data[i].room.roomID]) { //if rooms not exist in rooms hashmap
+									_this.tapCoreRoomListManager.updateRoomsNotExist(data[i]);
 								}else {
-									if(!tapTalkRooms[data[i].room.roomID]["messages"].localID) {
-										tapTalkRooms[data[i].room.roomID]["messages"][data[i].localID] = data[i];
-									}
-									
-									let _localIDNewMessage = tapTalkRooms[data[i].room.roomID]["messages"][data[i].localID];
-
-									_localIDNewMessage.body = decryptedMessage;
-
-									if(_localIDNewMessage.data !== "") {
-										_localIDNewMessage.data = JSON.parse(decryptKey(_localIDNewMessage.data, _localIDNewMessage.localID));
-									}
-
-									//room list action
-									_this.tapCoreRoomListManager.setRoomListLastMessage(data[i]);
-									//room list action
+									_this.tapCoreRoomListManager.updateRoomsExist(data[i]);
 								}
                             }
+
+                            isDoneFirstSetupRoomList = true;
+							isNeedToCallApiUpdateRoomList = false;
                             
                             callback.onSuccess(tapTalkRoomListHashmap);
 						}else {
 							if(response.error.code === "40104") {
-								_this.taptalk.refreshAccessToken(() => _this.tapCoreRoomListManager.getUpdatedRoomList(callback))
+								_this.taptalk.refreshAccessToken(() => _this.tapCoreRoomListManager.getRoomListAndRead(callback))
 							}else {
 								callback.onError(response.error.code, response.error.message);
 							}
@@ -1192,6 +1400,53 @@ exports.tapCoreRoomListManager = {
 			}
         }
     },
+
+    getRoomNewAndUpdated: (callback) => {
+		var url = `${baseApiUrl}/v1/chat/message/new_and_updated`;
+		var _this = this;
+		var user = this.taptalk.getTaptalkActiveUser().userID;
+
+        if(this.taptalk.isAuthenticated()) {
+            var userData = getLocalStorageObject('TapTalk.UserData');
+			authenticationHeader["Authorization"] = `Bearer ${userData.accessToken}`;
+			
+			doXMLHTTPRequest('POST', authenticationHeader, url, "")
+				.then(function (response) {
+					if(response.error.code === "") {
+						let responseNewAndUpdated = response.data.messages.reverse();
+                        let messageIDs = [];
+                        
+                        isNeedToCallApiUpdateRoomList = false;
+
+						if(responseNewAndUpdated.length > 0) {
+							for(let i in responseNewAndUpdated) {
+								messageIDs.push(responseNewAndUpdated[i].messageID);
+
+								if(!tapTalkRooms[responseNewAndUpdated[i].room.roomID]) { //if rooms not exist in rooms hashmap
+									_this.tapCoreRoomListManager.updateRoomsNotExist(responseNewAndUpdated[i]);
+								}else {
+									_this.tapCoreRoomListManager.updateRoomsExist(responseNewAndUpdated[i]);
+								}
+							}
+
+							_this.tapCoreMessageManager.markMessageAsDelivered(messageIDs);
+							
+							callback.onSuccess(tapTalkRoomListHashmap);
+						}
+					}else {
+						if(response.error.code === "40104") {
+							_this.taptalk.refreshAccessToken(() => _this.tapCoreRoomListManager.getRoomNewAndUpdated(callback));
+						}else {
+							callback.onError(response.error.code, response.error.message);
+						}
+					}
+				})
+				.catch(function (err) {
+					console.error('there was an error!', err);
+					
+				});
+        }
+	},
 
     getUnreadCountRoomList : (roomID) => {        
         if(tapTalkRooms[roomID]) {
@@ -2350,18 +2605,22 @@ exports.tapCoreMessageManager  = {
         }
     },
 
-    getNewerMessagesAfterTimestamp : (roomID, callback, minCreatedTimestamp = null) => {
+    getNewerMessagesAfterTimestamp : (roomID, callback) => {
         let url = `${baseApiUrl}/v1/chat/message/list_by_room/after`;
 		var _this = this;
 		var lastUpdateTimestamp;
 		
 		let objectKeyRoomListlength = Object.keys(tapTalkRooms[roomID].messages).length;
 
-		lastUpdateTimestamp = tapTalkRooms[roomID].lastUpdated === 0 ? tapTalkRooms[roomID].messages[Object.keys(tapTalkRooms[roomID].messages)[objectKeyRoomListlength - 1]].created : tapTalkRooms[roomID].lastUpdated;
+        var getMinCreatedTimestamp;
+						
+		getMinCreatedTimestamp =  tapTalkRooms[roomID].messages[Object.keys(tapTalkRooms[roomID].messages)[0]].created;
+        
+        lastUpdateTimestamp = tapTalkRooms[roomID].lastUpdated === 0 ? tapTalkRooms[roomID].messages[Object.keys(tapTalkRooms[roomID].messages)[objectKeyRoomListlength - 1]].created : tapTalkRooms[roomID].lastUpdated;
 		
         var data = {
             roomID: roomID,
-            minCreated: minCreatedTimestamp === null ? getMinCreatedTimestamp : minCreatedTimestamp,
+            minCreated: getMinCreatedTimestamp,
             lastUpdated: lastUpdateTimestamp
 		};
 		
@@ -2369,37 +2628,31 @@ exports.tapCoreMessageManager  = {
 			doXMLHTTPRequest('POST', authenticationHeader, url, data)
 					.then(function (response) {
 						if(response.error.code === "") {
-							if(minCreatedTimestamp === null) {
-								var currentRoomMessages = tapTalkRooms[roomID].messages;
-								
-								// Object.keys(currentRoomMessages).map(i => {
-								// 	currentRoomMessages[i].body = encryptKey(currentRoomMessages[i].body, currentRoomMessages[i].localID);
-								// });
-								
-								let responseMessage = response.data.messages.reverse();
+							var currentRoomMessages = tapTalkRooms[roomID].messages;
+							
+							let responseMessage = response.data.messages.reverse();
 
-								for(let i in responseMessage) {
-									currentRoomMessages[responseMessage[i].localID] = responseMessage[i];
-								}
+							for(let i in responseMessage) {
+								responseMessage[i].body = decryptKey(responseMessage[i].body, responseMessage[i].localID);
 
-								var newAPIAfterResponse = currentRoomMessages;
-							}
-
-							Object.keys(newAPIAfterResponse).map(i => {
-								newAPIAfterResponse[i].body = decryptKey(newAPIAfterResponse[i].body, newAPIAfterResponse[i].localID);
-
-								if(newAPIAfterResponse[i].data !== "") {
-									var messageIndex = newAPIAfterResponse[i];
+								if(responseMessage[i].data !== "") {
+									var messageIndex = responseMessage[i];
 									if(typeof messageIndex.data === "string") {
 										messageIndex.data = JSON.parse(decryptKey(messageIndex.data, messageIndex.localID));
 									}
 								}
 
-								if(newAPIAfterResponse[i].replyTo.localID !== "") {
-									var messageIndex = newAPIAfterResponse[i];
+								if(responseMessage[i].replyTo.localID !== "") {
+									var messageIndex = responseMessage[i];
 									messageIndex.quote.content = decryptKey(messageIndex.quote.content, messageIndex.localID)
 								}
 								
+								currentRoomMessages[responseMessage[i].localID] = responseMessage[i];
+							}
+
+							var newAPIAfterResponse = currentRoomMessages;
+
+							Object.keys(newAPIAfterResponse).map(i => {
 								tapTalkRooms[roomID].messages[newAPIAfterResponse[i].localID] = newAPIAfterResponse[i];
 								
 								var lastUpdated = tapTalkRooms[roomID].lastUpdated;
@@ -2407,14 +2660,14 @@ exports.tapCoreMessageManager  = {
 								if(lastUpdated < newAPIAfterResponse[i].updated) {
 									tapTalkRooms[roomID].lastUpdated = newAPIAfterResponse[i].updated;
 								}
-                            });
-                            
-                            _this.tapCoreMessageManager.sortMessagesObject(roomID);
+							});
+
+							_this.tapCoreMessageManager.sortMessagesObject(roomID);
 
 							callback.onSuccess(tapTalkRooms[roomID].messages);
 						}else {
 							if(response.error.code === "40104") {
-								_this.taptalk.refreshAccessToken(() => _this.tapCoreMessageManager.getNewerMessagesAfterTimestamp(roomID, callback, minCreatedTimestamp));
+								_this.taptalk.refreshAccessToken(() => _this.tapCoreMessageManager.getNewerMessagesAfterTimestamp(roomID, callback));
 							}else {
 								callback.onError(response.error.code, response.error.message);
 							}
@@ -2429,23 +2682,7 @@ exports.tapCoreMessageManager  = {
             let userData = getLocalStorageObject('TapTalk.UserData');
             authenticationHeader["Authorization"] = `Bearer ${userData.accessToken}`;
 			
-			if(minCreatedTimestamp === null ) {
-				let _objectKeyRoomListlength = Object.keys(tapTalkRooms[roomID].messages).length;
-				
-				if(_objectKeyRoomListlength < 50 && tapTalkRooms[roomID].hasMore) {
-					if(minCreatedTimestamp === null) {
-						var getMinCreatedTimestamp;
-						
-						getMinCreatedTimestamp =  Object.keys(tapTalkRooms[roomID].messages)[_objectKeyRoomListlength - 1].length;
-					}
-					
-					apiAfterRequest();
-				}else {
-					callback.onSuccess(tapTalkRooms[roomID].messages);
-				}
-			}else {
-				apiAfterRequest();
-			}
+			apiAfterRequest();
         }
     },
 
