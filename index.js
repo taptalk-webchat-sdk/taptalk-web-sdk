@@ -437,9 +437,18 @@ class TapTalkWebWorker {
 
 //start of web worker emit listener
 var tapLiveWorkerHandleEmitListener = new TapTalkWebWorker(() => {
-	self.addEventListener('message', e => {
-        let _this = this;
+    self.definePropertyAction = (key, value) => {
+		let newObject = {};
+        
+		Object.defineProperty(newObject, key, {
+			value: value,
+			writable: true
+		});
 
+		return newObject
+	}
+
+	self.addEventListener('message', e => {
 		let handleUpdateMessage = (message, rooms) => {
 			let _rooms = rooms;
 
@@ -453,7 +462,7 @@ var tapLiveWorkerHandleEmitListener = new TapTalkWebWorker(() => {
 
 			// tapCoreRoomListManager.setRoomListLastMessage(message, 'update emit');
 
-			_this.postMessage({
+			self.postMessage({
 				type: 'update',
 				message: message,
 				tapTalkRooms: _rooms
@@ -461,7 +470,7 @@ var tapLiveWorkerHandleEmitListener = new TapTalkWebWorker(() => {
 		}
 
 		let handleNewMessage = (activeUser, message, rooms) => {
-			let _rooms = rooms;
+			let _rooms = Object.assign({}, rooms);
 			let markMessageAsDelivered = false;
 			let user = activeUser;
 			let isRoomExist = _rooms[message.room.roomID];
@@ -485,18 +494,14 @@ var tapLiveWorkerHandleEmitListener = new TapTalkWebWorker(() => {
 		
 			if(isRoomExist) {
 				if(!isRoomExist[message.localID]) {
-					let messsageLocalID = message.localID;
-					let messageRoomID = message.room.roomID;
-					// _rooms[message.room.roomID].messages = Object.assign({[message.localID] : message}, _rooms[message.room.roomID].messages);
-					_rooms[message.room.roomID].messages = {[messsageLocalID]: message, ..._rooms[message.room.roomID].messages};
-		
+					// _rooms[message.room.roomID].messages = Object.assign(_rooms[message.room.roomID].messages, {[message.localID] : message});
+					_rooms[message.room.roomID].messages = Object.assign(_rooms[message.room.roomID].messages, self.definePropertyAction(message.localID, message));
+                    
 					let currentIndex = _rooms[message.room.roomID];
 					
-					delete _rooms[message.room.roomID];
+					// delete _rooms[message.room.roomID];
 
-					// _rooms = Object.assign({[message.room.roomID] : currentIndex}, _rooms);
-					_rooms = {[messageRoomID]: currentIndex, ..._rooms}
-
+					_rooms = Object.assign(_rooms, self.definePropertyAction(message.room.roomID, currentIndex));
 				}
 			}else {
 				let roomID = message.room.roomID;
@@ -525,7 +530,7 @@ var tapLiveWorkerHandleEmitListener = new TapTalkWebWorker(() => {
 				_rooms = removeRoom(message.room.roomID);
 			}
 
-			_this.postMessage({
+			self.postMessage({
 				type: 'new',
 				markMessageAsDelivered: markMessageAsDelivered,
 				message: message,
@@ -1278,7 +1283,7 @@ exports.tapCoreRoomListManager = {
 						temporaryRoomList.lastMessage = message;
 					}
 	
-					delete tapTalkRoomListHashmap[message.room.roomID];
+					// delete tapTalkRoomListHashmap[message.room.roomID];
 	
 					tapTalkRoomListHashmap = Object.assign({[message.room.roomID] : temporaryRoomList}, tapTalkRoomListHashmap);
 				}
