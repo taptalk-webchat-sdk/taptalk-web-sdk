@@ -2070,10 +2070,8 @@ exports.tapCoreMessageManager  = {
 
             if(tapTalkRooms[_message.room.roomID]) {
                 tapTalkRoomListHashmap[_message.room.roomID].lastMessage = _message;
-				
-				tapTalkRoomListHashmap = Object.assign(tapTalkRoomListHashmap[_message.room.roomID], tapTalkRoomListHashmap);
-
-                tapTalkRooms[_message.room.roomID].messages = Object.assign({[_message.localID]: _message}, tapTalkRooms[_message.room.roomID].messages);                
+				tapTalkRoomListHashmap = Object.assign({[_message.room.roomID]: tapTalkRoomListHashmap[_message.room.roomID]}, tapTalkRoomListHashmap);
+                tapTalkRooms[_message.room.roomID].messages = Object.assign({[_message.localID]: _message}, tapTalkRooms[_message.room.roomID].messages);  
             }else {
                 this.tapCoreMessageManager.pushNewRoom(_message);
             }
