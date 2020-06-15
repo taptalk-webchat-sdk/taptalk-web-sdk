@@ -1,2 +1,2 @@
 # taptalk-web-sdk
-This is taptalk javascript sdk for web app
+This is taptalk.io javascript sdk for web app

@@ -270,7 +270,7 @@ function doXMLHTTPRequest(method, header, url, data, isMultipart= false) {
 }
 
 function doXMLHTTPRequestToBase64(method, header, url, data, message, onProgress) {
-    let sendProgressDownload = (oEvent) => {
+    let sendProgressDownload = async (oEvent) => {
 		if (oEvent.lengthComputable) {
 		  var percentComplete = oEvent.loaded / oEvent.total * 100;
 		  onProgress(message, Math.round(percentComplete * 10) / 10, oEvent.loaded);
@@ -427,329 +427,155 @@ function isFileAllowed(fileType, file) {
     return fileTypeAllowed;
 }
 
-class TapTalkWebWorker {
-	constructor(worker) {
-		const code = worker.toString();
-		const blob = new Blob(["(" + code + ")()"]);
-		return new Worker(URL.createObjectURL(blob));
-	}
-}
-
-//start of web worker emit listener
-var tapLiveWorkerHandleEmitListener = new TapTalkWebWorker(() => {
-    self.definePropertyAction = (key, value) => {
-		let newObject = {};
-        
-		Object.defineProperty(newObject, key, {
-			value: value,
-			writable: true
-		});
-
-		return newObject
-	}
-
-	self.addEventListener('message', e => {
-		let handleUpdateMessage = (message, rooms) => {
-			let _rooms = rooms;
-
-			if(_rooms[message.room.roomID]) {
-				_rooms[message.room.roomID].messages[message.localID] = message;
-			
-				if(message.isRead) {
-					for(var i in _rooms[message.room.roomID].messages) {
-						_rooms[message.room.roomID].messages[i].isRead = true;
-					}
-				}
-			}
-
-			// tapCoreRoomListManager.setRoomListLastMessage(message, 'update emit');
-
-			self.postMessage({
-				type: 'update',
-				message: message,
-				tapTalkRooms: _rooms
-			})
-		}
-
-		let handleNewMessage = (activeUser, message, rooms) => {
-			let _rooms = Object.assign({}, rooms);
-			let markMessageAsDelivered = false;
-			let user = activeUser;
-			let isRoomExist = _rooms[message.room.roomID];
-
-			let removeRoom = (rooms, roomID) => {
-				delete rooms[roomID];
-				return rooms;
-			}
-		
-			let mergeTaptalkRooms = (obj, src) => {
-				for (var key in src) {
-					if (src.hasOwnProperty(key)) obj[key] = src[key];
-				}
-				return obj;
-			}
-		
-			if(user.userID !== message.user.userID) {
-				markMessageAsDelivered = true;
-				// tapCoreMessageManager.markMessageAsDelivered([message.messageID]);
-			}
-		
-			if(isRoomExist) {
-				if(!isRoomExist[message.localID]) {
-					// _rooms[message.room.roomID].messages = Object.assign(_rooms[message.room.roomID].messages, {[message.localID] : message});
-					_rooms[message.room.roomID].messages = Object.assign(_rooms[message.room.roomID].messages, self.definePropertyAction(message.localID, message));
-                    
-					let currentIndex = _rooms[message.room.roomID];
-					
-					// delete _rooms[message.room.roomID];
-
-					_rooms = Object.assign(_rooms, self.definePropertyAction(message.room.roomID, currentIndex));
-				}
-			}else {
-				let roomID = message.room.roomID;
-		
-				let newRoom = self.definePropertyAction(roomID, {
-                    messages: {},
-                    hasMore: true,
-                    lastUpdated: 0
-                })
-		
-				newRoom[roomID].messages[message.localID] = message;
-				_rooms = mergeTaptalkRooms(newRoom, _rooms);
-			}
-		
-			// tapCoreRoomListManager.setRoomListLastMessage(message, 'new emit');
-		
-			//if delete room
-			if(message.action === 'room/delete' && message.type === 9001) {
-				_rooms = removeRoom(message.room.roomID);
-			}
-		
-			//if leave group
-			if((message.action === 'room/leave' && message.type === 9001) && taptalk.getTaptalkActiveUser().userID === message.user.userID) {
-				_rooms = removeRoom(message.room.roomID);
-			}
-
-			self.postMessage({
-				type: 'new',
-				markMessageAsDelivered: markMessageAsDelivered,
-				message: message,
-				tapTalkRooms: _rooms
-			})
-		}
-
-		let handleEmit = (emit) => {
-			switch(emit.eventName) {
-				case "chat/sendMessage":
-					handleNewMessage(e.data.activeUser, e.data.message, e.data.tapTalkRooms)
-					break;
-		
-				case "chat/updateMessage":
-					handleUpdateMessage(e.data.message, e.data.tapTalkRooms)
-					break;
-			}
-		}
-
-		handleEmit(e.data);
-	})
-});
-
-tapLiveWorkerHandleEmitListener.addEventListener('message', e => {
-	switch(e.data.type) {
-		case 'new':
-			if(e.data.markMessageAsDelivered) {
-				module.exports.tapCoreMessageManager.markMessageAsDelivered([e.data.message.messageID]);
-			}
-
-			tapTalkRooms = e.data.tapTalkRooms;
-			module.exports.tapCoreRoomListManager.setRoomListLastMessage(e.data.message, 'new emit');
-
-			for(var i in tapMessageListeners) {
-				tapMessageListeners[i].onReceiveNewMessage(e.data.message);
-			}
-
-			break;
-		case 'update':
-			tapTalkRooms = e.data.tapTalkRooms;
-			module.exports.tapCoreRoomListManager.setRoomListLastMessage(e.data.message, 'update emit');
-
-			for(var i in tapMessageListeners) {
-				tapMessageListeners[i].onReceiveUpdateMessage(e.data.message);
-			}
-
-			break;
-	}
-});
-//end of web worker emit listener
-
 var tapReader = new FileReader();
 
 tapReader.onload = function () {
 	var messages = this.result.split('\n');
 	for (let i in messages) {
-        var m = JSON.parse(messages[i]);
+      var m = JSON.parse(messages[i]);
       
-        //   handleEmit(m);
-        
-		if(m.eventName === 'chat/sendMessage' || m.eventName === 'chat/updateMessage') {
-            //start of decrypting all of encrypted content
-			m.data.body = decryptKey(m.data.body, m.data.localID);
-
-			if(m.data.data !== "") {
-				m.data.data = JSON.parse(decryptKey(m.data.data, m.data.localID));
-			}
-
-			if(m.data.replyTo.localID !== "") {
-				m.data.quote.content = decryptKey(m.data.quote.content, m.data.localID);
-			}
-			//end of decrypting all of encrypted content
-			
-			tapLiveWorkerHandleEmitListener.postMessage({
-				activeUser: module.exports.taptalk.getTaptalkActiveUser(),
-				eventName: m.eventName,
-				message: m.data,
-				tapTalkRooms: tapTalkRooms
-			})
-		}
+      handleEmit(m);
 	 
-        switch(m.eventName) {
-            // case "chat/sendMessage":
-            //     for(let i in tapMessageListeners) {
-            //         tapMessageListeners[i].onReceiveNewMessage(m.data);
-            //     }
-            //     break;
+      switch(m.eventName) {
+        case "chat/sendMessage":
+            for(let i in tapMessageListeners) {
+                tapMessageListeners[i].onReceiveNewMessage(m.data);
+            }
+            break;
 
-            // case "chat/updateMessage":
-            //     for(let i in tapMessageListeners) {
-            //         tapMessageListeners[i].onReceiveUpdateMessage(m.data);
-            //     }
-            //     break;
+        case "chat/updateMessage":
+            for(let i in tapMessageListeners) {
+                tapMessageListeners[i].onReceiveUpdateMessage(m.data);
+            }
+            break;
 
-            case "chat/startTyping":
-                for(let i in tapRoomStatusListeners) {
-                    tapRoomStatusListeners[i].onReceiveStartTyping(m.data.roomID, m.data.user);
-                }
-                break;
+        case "chat/startTyping":
+            for(let i in tapRoomStatusListeners) {
+                tapRoomStatusListeners[i].onReceiveStartTyping(m.data.roomID, m.data.user);
+            }
+            break;
 
-            case "chat/stopTyping":
-                for(let i in tapRoomStatusListeners) {
-                    tapRoomStatusListeners[i].onReceiveStopTyping(m.data.roomID, m.data.user);
-                }
-                break;
+        case "chat/stopTyping":
+            for(let i in tapRoomStatusListeners) {
+                tapRoomStatusListeners[i].onReceiveStopTyping(m.data.roomID, m.data.user);
+            }
+            break;
 
-            case "user/status":
-                for(let i in tapRoomStatusListeners) {
-                    tapRoomStatusListeners[i].onReceiveOnlineStatus(m.data.user, m.data.isOnline, m.data.lastActive);
-                }
-                break;
-        }
+        case "user/status":
+            for(let i in tapRoomStatusListeners) {
+                tapRoomStatusListeners[i].onReceiveOnlineStatus(m.data.user, m.data.isOnline, m.data.lastActive);
+            }
+            break;
+      }
     }
-        
+    
     tapMsgQueue.processNext();
 };
 
-// function handleEmit(emit) {
-// 	switch(emit.eventName) {
-// 		case "chat/sendMessage":
-// 				handleNewMessage(emit.data)
-// 				break;
+function handleEmit(emit) {
+	switch(emit.eventName) {
+		case "chat/sendMessage":
+				handleNewMessage(emit.data)
+				break;
 
-// 		case "chat/updateMessage":
-// 				handleUpdateMessage(emit.data);
-// 			break;
-// 	}
-// }
+		case "chat/updateMessage":
+				handleUpdateMessage(emit.data);
+			break;
+	}
+}
 
-// var handleNewMessage = (message) => {
-//     let _this = this;
-//     let user = this.taptalk.getTaptalkActiveUser();
+var handleNewMessage = (message) => {
+    let _this = this;
+    let user = this.taptalk.getTaptalkActiveUser();
 
-//     let removeRoom = (roomID) => {
-// 		delete tapTalkRooms[roomID];
-// 	}
+    let removeRoom = (roomID) => {
+		delete tapTalkRooms[roomID];
+	}
     
-//     let mergeTaptalkRooms = (obj, src) => {
-// 		for (var key in src) {
-// 			if (src.hasOwnProperty(key)) obj[key] = src[key];
-// 		}
-// 		return obj;
-// 	}
+    let mergeTaptalkRooms = (obj, src) => {
+		for (var key in src) {
+			if (src.hasOwnProperty(key)) obj[key] = src[key];
+		}
+		return obj;
+	}
 	
-// 	if(user.userID !== message.user.userID) {
-// 		this.tapCoreMessageManager.markMessageAsDelivered([message.messageID]);
-// 	}
+	if(user.userID !== message.user.userID) {
+		this.tapCoreMessageManager.markMessageAsDelivered([message.messageID]);
+	}
 
-// 	message.body = decryptKey(message.body, message.localID);
+	message.body = decryptKey(message.body, message.localID);
 
-// 	if(message.data !== "") {
-// 		message.data = JSON.parse(decryptKey(message.data, message.localID));
-//     }
+	if(message.data !== "") {
+		message.data = JSON.parse(decryptKey(message.data, message.localID));
+    }
     
-//     if(message.replyTo.localID !== "") {
-// 		message.quote.content = decryptKey(message.quote.content, message.localID);
-// 	}
+    if(message.replyTo.localID !== "") {
+		message.quote.content = decryptKey(message.quote.content, message.localID);
+	}
 
-// 	let isRoomExist = tapTalkRooms[message.room.roomID];
+	let isRoomExist = tapTalkRooms[message.room.roomID];
 	
-// 	if(isRoomExist) {
-// 		if(!isRoomExist[message.localID]) {
-// 			tapTalkRooms[message.room.roomID].messages = Object.assign({[message.localID] : message}, tapTalkRooms[message.room.roomID].messages);
+	if(isRoomExist) {
+		if(!isRoomExist.messages[message.localID]) {
+			tapTalkRooms[message.room.roomID].messages = Object.assign({[message.localID] : message}, tapTalkRooms[message.room.roomID].messages);
 
-// 			var currentIndex = tapTalkRooms[message.room.roomID];
+			var currentIndex = tapTalkRooms[message.room.roomID];
 
-// 			delete tapTalkRooms[message.room.roomID];
+			delete tapTalkRooms[message.room.roomID];
 
-// 			tapTalkRooms = Object.assign({[message.room.roomID] : currentIndex}, tapTalkRooms);
-// 		}
-// 	}else {
-// 		var roomID = message.room.roomID;
+			tapTalkRooms = Object.assign({[message.room.roomID] : currentIndex}, tapTalkRooms);
+		}else {
+            isRoomExist.messages[message.localID] = message;
+        }
+	}else {
+		var roomID = message.room.roomID;
 
-// 		var newRoom = {
-// 			[roomID]: {
-// 				messages: {},
-// 				hasMore: true,
-// 				lastUpdated: 0
-// 			}
-// 		}
+		var newRoom = {
+			[roomID]: {
+				messages: {},
+				hasMore: true,
+				lastUpdated: 0
+			}
+		}
 
-// 		newRoom[roomID].messages[message.localID] = message;
-// 		tapTalkRooms = mergeTaptalkRooms(newRoom, tapTalkRooms);
-// 	}
+		newRoom[roomID].messages[message.localID] = message;
+		tapTalkRooms = mergeTaptalkRooms(newRoom, tapTalkRooms);
+	}
 
-//     module.exports.tapCoreRoomListManager.setRoomListLastMessage(message, 'new emit');
+    module.exports.tapCoreRoomListManager.setRoomListLastMessage(message, 'new emit');
     
-//     //if delete room
-// 	if(message.action === 'room/delete' && message.type === CHAT_MESSAGE_TYPE_SYSTEM_MESSAGE) {
-// 		removeRoom(message.room.roomID);
-//     }
+    //if delete room
+	if(message.action === 'room/delete' && message.type === CHAT_MESSAGE_TYPE_SYSTEM_MESSAGE) {
+		removeRoom(message.room.roomID);
+    }
     
-//     //if leave group
-// 	if((message.action === 'room/leave' && message.type === 9001) && module.exports.taptalk.getTaptalkActiveUser().userID === message.user.userID) {
-// 		removeRoom(message.room.roomID);
-// 	}
-// }
+    //if leave group
+	if((message.action === 'room/leave' && message.type === 9001) && module.exports.taptalk.getTaptalkActiveUser().userID === message.user.userID) {
+		removeRoom(message.room.roomID);
+	}
+}
 
-// var handleUpdateMessage = (message) => {
-// 	message.body = decryptKey(message.body, message.localID);
+var handleUpdateMessage = (message) => {
+    message.body = decryptKey(message.body, message.localID);
 
-// 	if(message.data !== "") {
-// 		message.data = JSON.parse(decryptKey(message.data, message.localID));
-//     }
+	if(message.data !== "") {
+		message.data = JSON.parse(decryptKey(message.data, message.localID));
+    }
     
-//     if(message.replyTo.localID !== "") {
-// 		message.quote.content = decryptKey(message.quote.content, message.localID);
-// 	}
+    if(message.replyTo.localID !== "") {
+		message.quote.content = decryptKey(message.quote.content, message.localID);
+	}
 
-//     tapTalkRooms[message.room.roomID].messages[message.localID] = message;
+    tapTalkRooms[message.room.roomID].messages[message.localID] = message;
 	
-// 	if(message.isRead) {
-// 		for(var i in tapTalkRooms[message.room.roomID].messages) {
-// 			tapTalkRooms[message.room.roomID].messages[i].isRead = true;
-// 		}
-// 	}
+	if(message.isRead) {
+		for(var i in tapTalkRooms[message.room.roomID].messages) {
+			tapTalkRooms[message.room.roomID].messages[i].isRead = true;
+		}
+	}
 
-// 	module.exports.tapCoreRoomListManager.setRoomListLastMessage(message, 'update emit');
-// }
+	module.exports.tapCoreRoomListManager.setRoomListLastMessage(message, 'update emit');
+}
 
 class TapMessageQueue {
     constructor() {
@@ -816,7 +642,7 @@ class TapEmitMessageQueue {
 	}
 
 	pushEmitQueue(emit) {
-		this.emitQueue.push(emit);
+        this.emitQueue.push(emit);
 
 		if(!this.isRunningMessageQueue) {
 			this.runEmitQueue();
@@ -866,6 +692,28 @@ let compressImageFile = (file, widthVal, heightVal) => {
 }
 
 exports.taptalk = {
+    forTesting : () => {
+        let data = {
+            // _tapTalkEmitMessageQueue: tapTalkEmitMessageQueue,
+            _taptalkRooms: tapTalkRooms,
+            _tapTalkRoomListHashmap: tapTalkRoomListHashmap
+        }
+
+        this.tapCoreMessageManager.getOlderMessagesBeforeTimestamp("t2414", 50, {
+            onSuccess: (messages) => {
+                Object.keys(tapTalkRooms["t2414"].messages).map(value => {
+                    console.log(tapTalkRooms["t2414"].messages[value].localID, tapTalkRooms["t2414"].messages[value].body)
+                })
+            },
+            onError: (errorCode, errorMessage) => {
+                setIsLoadingChat(false);
+                console.log(errorCode, errorMessage);
+            }
+        });
+
+        return data; 
+    },
+    
     init : (appID, appSecret, baseUrlApi) => {
         authenticationHeader["App-Key"] = btoa(`${appID}:${appSecret}`);
         // authenticationHeader["Server-Key"] = btoa(`${serverID}:${serverSecret}`);
@@ -1283,7 +1131,7 @@ exports.tapCoreRoomListManager = {
 						temporaryRoomList.lastMessage = message;
 					}
 	
-					// delete tapTalkRoomListHashmap[message.room.roomID];
+					delete tapTalkRoomListHashmap[message.room.roomID];
 	
 					tapTalkRoomListHashmap = Object.assign({[message.room.roomID] : temporaryRoomList}, tapTalkRoomListHashmap);
 				}
@@ -1305,8 +1153,9 @@ exports.tapCoreRoomListManager = {
     },
     
     updateRoomsExist: (message) => {
-		let decryptedMessage = decryptKey(message.body, message.localID);
-
+        let decryptedMessage = decryptKey(message.body, message.localID);
+        // let decryptedMessage = message.body;
+        
 		if(!tapTalkRooms[message.room.roomID]["messages"].localID) {
 			tapTalkRooms[message.room.roomID]["messages"][message.localID] = message;
 		}
@@ -1351,7 +1200,7 @@ exports.tapCoreRoomListManager = {
     },
     
     getUpdatedRoomList: (callback) => {
-		if(!isDoneFirstSetupRoomList) {
+        if(!isDoneFirstSetupRoomList) {
 			this.tapCoreRoomListManager.getRoomListAndRead(callback)
 		}else {
 			if(isDoneFirstSetupRoomList && !isNeedToCallApiUpdateRoomList) {
@@ -1548,7 +1397,95 @@ exports.tapCoreChatRoomManager = {
     
     addMessageListener : (callback) => {	
         tapMessageListeners.push(callback);
-	},
+    },
+    
+        generateRoom : (user, callback = null, error = null) => {
+            let result = {
+                success: "",
+                error: {},
+                room: {
+                    color: "",
+                    deleted: 0,
+                    imageURL: {thumbnail: "", fullsize: ""},
+                    isDeleted: false,
+                    isLocked: false,
+                    lockedTime: 0,
+                    name: "",
+                    roomID: "",
+                    type: ROOM_TYPE.PERSONAL,
+                    xcRoomID: ""
+                }
+            }
+
+            let otherUser = user;
+            let myUser = this.taptalk.getTaptalkActiveUser();
+            let roomID = "";
+
+            if(error === null) {
+                result.success = true;
+        
+                if(parseInt(myUser.userID) > parseInt(otherUser.userID)) {
+                    roomID = parseInt(otherUser.userID)+"-"+parseInt(myUser.userID);
+                }else {
+                    roomID = parseInt(myUser.userID)+"-"+parseInt(otherUser.userID);
+                }
+        
+                result.room.roomID = roomID;
+                result.room.name = otherUser.fullname;
+                result.room.imageURL = otherUser.imageURL;
+            }else {
+                result.success = false;
+                result.error = error;
+            }
+
+            if(callback !== null) {
+                callback(result);
+            }else {
+                return result;
+            }  
+        },
+
+        createRoomWithOtherUser : (userModel) => {
+            return this.tapCoreChatRoomManager.generateRoom(userModel);
+        },
+
+        createRoomWithUserID : (userID, callback) => {
+            this.tapCoreContactManager.getUserDataWithUserID(userID, {
+                onSuccess: (user) => {
+                    this.tapCoreChatRoomManager.generateRoom(user.user, (response) => {
+                        callback(response);
+                    });
+                }, 
+                onError: (errorCode, errorMessage) => {
+                    this.tapCoreChatRoomManager.generateRoom(null, (response) => {
+                        callback(response);
+                    },
+                    {
+                        code: errorCode,
+                        message: errorMessage
+                    });
+                }
+            });
+        },
+
+        createRoomWithXCUserID : (xcUserID, callback) => {
+            this.tapCoreContactManager.getUserDataWithXCUserID(xcUserID, {
+                onSuccess: (user) => {
+                    this.tapCoreChatRoomManager.generateRoom(user.user, (response) => {
+                        callback(response);
+                    });
+                }, 
+                onError: (errorCode, errorMessage) => {
+                    this.tapCoreChatRoomManager.generateRoom(null, (response) => {
+                        callback(response);
+                    },
+                    {
+                        code: errorCode,
+                        message: errorMessage
+                    });
+                }
+            });
+        },
 
     createGroupChatRoom : (groupName, participantList, callback) => {
         let url = `${baseApiUrl}/v1/client/room/create`;
@@ -2045,13 +1982,33 @@ exports.tapCoreMessageManager  = {
 
 		tapTalkRooms = Object.assign({[messageModel.room.roomID]: newTaptalkRoom}, tapTalkRooms);
 
-		tapTalkRooms[messageModel.room.roomID].message[messageModel.localID] = messageModel;
+		tapTalkRooms[messageModel.room.roomID].messages[messageModel.localID] = messageModel;
 
 		newRoomListHashmap.lastMessage = messageModel;
 		newRoomListHashmap.unreadCount = (!messageModel.isRead && user !== messageModel.user.userID) ? 1 : 0;
 
-		tapTalkRoomListHashmap = Object.assign({[message.room.roomID] : newRoomListHashmap}, tapTalkRoomListHashmap);
-	},
+		tapTalkRoomListHashmap = Object.assign({[messageModel.room.roomID] : newRoomListHashmap}, tapTalkRoomListHashmap);
+    },
+
+    sendTextMessageWithoutEmit : (messageBody, room, callback) => {
+        if(this.taptalk.isAuthenticated()) {
+            this.tapCoreMessageManager.constructTapTalkMessageModel(messageBody, room, CHAT_MESSAGE_TYPE_TEXT, "");
+
+            let _message = {...MESSAGE_MODEL};
+
+			_message.body = messageBody;
+
+			if(tapTalkRooms[_message.room.roomID]) {
+                tapTalkRoomListHashmap[_message.room.roomID].lastMessage = _message;
+				tapTalkRoomListHashmap = Object.assign({[_message.room.roomID]: tapTalkRoomListHashmap[_message.room.roomID]}, tapTalkRoomListHashmap);
+                tapTalkRooms[_message.room.roomID].messages = Object.assign({[_message.localID]: _message}, tapTalkRooms[_message.room.roomID].messages);
+            }else {
+                this.tapCoreMessageManager.pushNewRoom(_message);
+            }
+
+            callback(_message);
+        }
+    },
 
     sendTextMessage : (messageBody, room, callback) => {
         if(this.taptalk.isAuthenticated()) {
@@ -2062,23 +2019,23 @@ exports.tapCoreMessageManager  = {
                 data: MESSAGE_MODEL
             };
             
-            tapEmitMsgQueue.pushEmitQueue(JSON.stringify(emitData));
-
             let _message = {...MESSAGE_MODEL};
 
-			_message.body = messageBody;
-
+            _message.body = messageBody;
+            
             if(tapTalkRooms[_message.room.roomID]) {
                 tapTalkRoomListHashmap[_message.room.roomID].lastMessage = _message;
 				tapTalkRoomListHashmap = Object.assign({[_message.room.roomID]: tapTalkRoomListHashmap[_message.room.roomID]}, tapTalkRoomListHashmap);
-                tapTalkRooms[_message.room.roomID].messages = Object.assign({[_message.localID]: _message}, tapTalkRooms[_message.room.roomID].messages);  
+                tapTalkRooms[_message.room.roomID].messages = Object.assign({[_message.localID]: _message}, tapTalkRooms[_message.room.roomID].messages);
             }else {
                 this.tapCoreMessageManager.pushNewRoom(_message);
             }
-			
-            callback(emitData);
+
+            callback(_message);
+                
+            tapEmitMsgQueue.pushEmitQueue(JSON.stringify(emitData));
         }
-    },
+    }, 
 
     sendTextMessageQuotedMessage : (messageBody, room, quotedMessage, callback) => {
         if(this.taptalk.isAuthenticated()) {
@@ -2142,7 +2099,7 @@ exports.tapCoreMessageManager  = {
         let uploadData = new FormData();
         let _this = this;
         let fileType = data.file.type.split("/")[0];
-
+        
         let generateBase64 = (fileID) => {
 			let readerUploadData = new FileReader();
 			readerUploadData.readAsDataURL(data.file);
@@ -2159,7 +2116,7 @@ exports.tapCoreMessageManager  = {
         uploadData.append("roomID", data.room);
         uploadData.append("file", data.file);
         uploadData.append("caption", data.caption);
-        uploadData.append("fileType", fileType !== "image" || "video" ? "file" : fileType);
+        uploadData.append("fileType", fileType === "file" ? "file" : fileType); 
         
         if(_this.taptalk.isAuthenticated()) {
             let userData = getLocalStorageObject('TapTalk.UserData');
@@ -2185,7 +2142,7 @@ exports.tapCoreMessageManager  = {
         }
     },
 
-    sendImageMessage : (file, caption, room, callback) => {
+    actionSendImageMessage : (file, caption, room, callback, isSendEmit) => {
         let imageWidth = "";
 		let imageHeight = "";
 		let _URL = window.URL || window.webkitURL;
@@ -2204,15 +2161,15 @@ exports.tapCoreMessageManager  = {
 			if(file.size > projectConfigs.core.chatMediaMaxFileSize) {
 				callback.onError('90302', 'The request failed because maximum file size was exceeded.');
 			}else {
-				let currentLocalID = guid();
-	
-				let uploadData = {
-					file: file,
-					caption: caption,
-					room: room.roomID
-				};
-	
-				let data = {
+                let currentLocalID = guid();
+
+                let uploadData = {
+                    file: file,
+                    caption: caption,
+                    room: room.roomID
+                };
+    
+                let data = {
 					fileName: file.name,
 					mediaType: file.type,
 					size: file.size,
@@ -2223,50 +2180,53 @@ exports.tapCoreMessageManager  = {
 					fileUri: "",
 					caption: caption
 				};
-	
-				_this.tapCoreMessageManager.constructTapTalkMessageModel(file.name, room, CHAT_MESSAGE_TYPE_IMAGE, data, currentLocalID);
-				_this.tapCoreMessageManager.constructMessageStatus(true, false, false, false);
-	
-				let newMessageFile = Object.assign({}, MESSAGE_MODEL);
-	
-				newMessageFile.data = JSON.parse(decryptKey(newMessageFile.data, currentLocalID));
-	
-				callback.onStart(newMessageFile);
-
+    
+                _this.tapCoreMessageManager.constructTapTalkMessageModel(file.name, room, CHAT_MESSAGE_TYPE_IMAGE, data, currentLocalID);
+                
+                let _message = {...MESSAGE_MODEL};
+    
+                _message.body = file.name;
+                _message.data = data;
+                _message.bytesUpload = 0;
+                _message.percentageUpload = 0;
+                
+                if(tapTalkRooms[_message.room.roomID]) {
+                    tapTalkRoomListHashmap[_message.room.roomID].lastMessage = _message;
+                    tapTalkRoomListHashmap = Object.assign({[_message.room.roomID]: tapTalkRoomListHashmap[_message.room.roomID]}, tapTalkRoomListHashmap);
+                    tapTalkRooms[_message.room.roomID].messages = Object.assign({[_message.localID]: _message}, tapTalkRooms[_message.room.roomID].messages);
+    
+                }else {
+                    _this.tapCoreMessageManager.pushNewRoom(_message);
+                }
+    
+                callback.onStart(_message);
+                
 				_this.tapCoreMessageManager.uploadChatFile(uploadData, {
 					onProgress: (percentage, bytes) => {
 						callback.onProgress(currentLocalID, percentage, bytes);
 					},
 		
 					onSuccess: (response) => {
-						let data = {
-							fileName: file.name,
-							mediaType: file.type,
-							size: file.size,
-							fileID: response.fileID,
-							thumbnail: imageCompressResult.split(',')[1],
-							width: response.width,
-							height: response.height,
-							fileUri: "",
-							caption: response.caption
-						};
-		
-						if(response) {
-							_this.tapCoreMessageManager.constructTapTalkMessageModel(file.name, room, CHAT_MESSAGE_TYPE_IMAGE, data, currentLocalID);
-							_this.tapCoreMessageManager.constructMessageStatus(true, false, false, false);
-		
-							let emitData = {
-								eventName: SOCKET_NEW_MESSAGE,
-								data: MESSAGE_MODEL
-							};
-		
-                            tapEmitMsgQueue.pushEmitQueue(JSON.stringify(emitData));
+                        if(response) {
+                            let _messageForCallback = {..._message};
+                            response.thumbnail = imageCompressResult.split(',')[1];
+                            _messageForCallback.data = response;
+                            _messageForCallback.body = file.name;
                             
-                            emitData.data.body = decryptKey(emitData.data.body, emitData.data.localID);
-						    emitData.data.data = JSON.parse(decryptKey(emitData.data.data, emitData.data.localID));
-						
-							callback.onSuccess(emitData.data);
-						}
+                            callback.onSuccess(_messageForCallback);
+    
+                            if(isSendEmit) {
+                                let _messageClone = {..._message};
+                                _messageClone.data = encryptKey(JSON.stringify(response), _message.localID);
+                                _messageClone.body = encryptKey(_messageClone.body, _messageClone.localID);
+                                let emitData = {
+                                    eventName: SOCKET_NEW_MESSAGE,
+                                    data: _messageClone
+                                };
+                                
+                                tapEmitMsgQueue.pushEmitQueue(JSON.stringify(emitData));
+                            }
+                        }
 					},
 		
 					onError: (errorCode, errorMessage) => {
@@ -2275,6 +2235,14 @@ exports.tapCoreMessageManager  = {
 				});
 			}
 		})
+    },
+
+    sendImageMessage : (file, caption, room, callback) => {
+        this.tapCoreMessageManager.actionSendImageMessage(file, caption, room, callback, true);
+    },
+
+    sendImageMessageWithoutEmit : (file, caption, room, callback) => {
+        this.tapCoreMessageManager.actionSendImageMessage(file, caption, room, callback, false);
     },
 
     sendImageMessageQuotedMessage : (file, caption, room, quotedMessage, callback) => {
@@ -2309,7 +2277,7 @@ exports.tapCoreMessageManager  = {
         });
     },
 
-    sendVideoMessage : (file, caption, room, callback) => {
+    actionSendVideoMessage : (file, caption, room, callback, isSendEmit) => {
         let _this = this;
 
 		let videoMetaData = (file) => {
@@ -2337,39 +2305,51 @@ exports.tapCoreMessageManager  = {
             videoCanvas.height = value.height;
             videoCanvas.width = value.width;
             videoCanvas.getContext('2d').drawImage(value.video, 0, 0)
-            var snapshot = videoCanvas.toDataURL();
+            // var snapshot = videoCanvas.toDataURL();
+            let videoThumbnail = "iVBORw0KGgoAAAANSUhEUgAAACQAAAApCAYAAABdnotGAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsIAAA7CARUoSoAAAABKSURBVFhH7c4hDsAwEASxS///5zag3PTAWFotnTMz790az/9rFCQFSUFSkBQkBUlBUpAUJAVJQVKQFCQFSUFSkBQkBUlBsixo5gPuqwFROINNBAAAAABJRU5ErkJggg==";
 
 			if(file.size > projectConfigs.core.chatMediaMaxFileSize) {
 				callback.onError('90302', 'The request failed because maximum file size was exceeded.');
 			}else {
 				let currentLocalID = guid();
-	
-				let uploadData = {
-					file: file,
-					caption: caption,
-					room: room.roomID
-				};
-	
-				let data = {
+
+                let uploadData = {
+                    file: file,
+                    caption: caption,
+                    room: room.roomID
+                };
+    
+                let data = {
 					fileName: file.name,
 					mediaType: file.type,
 					size: file.size,
 					fileID: "",
-					thumbnail: "iVBORw0KGgoAAAANSUhEUgAAACQAAAApCAYAAABdnotGAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsIAAA7CARUoSoAAAABKSURBVFhH7c4hDsAwEASxS///5zag3PTAWFotnTMz790az/9rFCQFSUFSkBQkBUlBUpAUJAVJQVKQFCQFSUFSkBQkBUlBsixo5gPuqwFROINNBAAAAABJRU5ErkJggg==",
+					thumbnail: videoThumbnail,
 					width: value.width,
 					height: value.height,
 					caption: caption,
 					duration: value.duration
 				};
-	
-				_this.tapCoreMessageManager.constructTapTalkMessageModel(file.name, room, CHAT_MESSAGE_TYPE_VIDEO, data, currentLocalID);
-				_this.tapCoreMessageManager.constructMessageStatus(true, false, false, false);
-	
-				let newMessageFile = Object.assign({}, MESSAGE_MODEL);
-	
-				newMessageFile.data = JSON.parse(decryptKey(newMessageFile.data, currentLocalID));
-	
-				callback.onStart(newMessageFile);
+    
+                _this.tapCoreMessageManager.constructTapTalkMessageModel(file.name, room, CHAT_MESSAGE_TYPE_VIDEO, data, currentLocalID);
+                
+                let _message = {...MESSAGE_MODEL};
+    
+                _message.body = file.name;
+                _message.data = data;
+                _message.bytesUpload = 0;
+                _message.percentageUpload = 0;
+                
+                if(tapTalkRooms[_message.room.roomID]) {
+                    tapTalkRoomListHashmap[_message.room.roomID].lastMessage = _message;
+                    tapTalkRoomListHashmap = Object.assign({[_message.room.roomID]: tapTalkRoomListHashmap[_message.room.roomID]}, tapTalkRoomListHashmap);
+                    tapTalkRooms[_message.room.roomID].messages = Object.assign({[_message.localID]: _message}, tapTalkRooms[_message.room.roomID].messages);
+    
+                }else {
+                    _this.tapCoreMessageManager.pushNewRoom(_message);
+                }
+    
+                callback.onStart(_message);
 		
 				_this.tapCoreMessageManager.uploadChatFile(uploadData, {
 					onProgress: (percentage, bytes) => {
@@ -2377,34 +2357,29 @@ exports.tapCoreMessageManager  = {
 					},
 		
 					onSuccess: (response) => {
-						let data = {
-							fileName: file.name,
-							mediaType: file.type,
-							size: file.size,
-							fileID: response.fileID,
-							thumbnail: "iVBORw0KGgoAAAANSUhEUgAAACQAAAApCAYAAABdnotGAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsIAAA7CARUoSoAAAABKSURBVFhH7c4hDsAwEASxS///5zag3PTAWFotnTMz790az/9rFCQFSUFSkBQkBUlBUpAUJAVJQVKQFCQFSUFSkBQkBUlBsixo5gPuqwFROINNBAAAAABJRU5ErkJggg==",
-							width: value.width,
-							height: value.height,
-							caption: response.caption,
-							duration: value.duration
-						};
-		
-						if(response) {
-							_this.tapCoreMessageManager.constructTapTalkMessageModel(file.name, room, CHAT_MESSAGE_TYPE_VIDEO, data, currentLocalID);
-							_this.tapCoreMessageManager.constructMessageStatus(true, false, false, false);
-		
-							let emitData = {
-								eventName: SOCKET_NEW_MESSAGE,
-								data: MESSAGE_MODEL
-							};
-		
-                            tapEmitMsgQueue.pushEmitQueue(JSON.stringify(emitData));
+                        if(response) {
+                            let _messageForCallback = {..._message};
+                            response.thumbnail = videoThumbnail;
+                            response.width = value.width;
+                            response.height = value.height;
+                            response.duration = value.duration;
+                            _messageForCallback.data = response;
+                            _messageForCallback.body = file.name;
                             
-                            emitData.data.body = decryptKey(emitData.data.body, emitData.data.localID);
-						    emitData.data.data = JSON.parse(decryptKey(emitData.data.data, emitData.data.localID));
-						
-							callback.onSuccess(emitData.data);
-						}
+                            callback.onSuccess(_messageForCallback);
+    
+                            if(isSendEmit) {
+                                let _messageClone = {..._message};
+                                _messageClone.data = encryptKey(JSON.stringify(response), _message.localID);
+                                _messageClone.body = encryptKey(_messageClone.body, _messageClone.localID);
+                                let emitData = {
+                                    eventName: SOCKET_NEW_MESSAGE,
+                                    data: _messageClone
+                                };
+                                
+                                tapEmitMsgQueue.pushEmitQueue(JSON.stringify(emitData));
+                            }
+                        }
 					},
 		
 					onError: (errorCode, errorMessage) => {
@@ -2413,6 +2388,14 @@ exports.tapCoreMessageManager  = {
 				});
 			}
 		})
+    },
+    
+    sendVideoMessage : (file, caption, room, callback) => {
+        this.tapCoreMessageManager.actionSendVideoMessage(file, caption, room, callback, true);
+    },
+
+    sendVideoMessageWithoutEmit : (file, caption, room, callback) => {
+        this.tapCoreMessageManager.actionSendVideoMessage(file, caption, room, callback, false);
     },
 
     sendVideoMessageQuotedMessage : (videoUri, caption, room, quotedMessage, callback) => {
@@ -2447,7 +2430,7 @@ exports.tapCoreMessageManager  = {
         });
     },
 
-    sendFileMessage : (file, room, callback) => {
+    actionSendFileMessage : (file, room, callback, isSendEmit) => {
         if(file.size > projectConfigs.core.chatMediaMaxFileSize) {
 			callback.onError('90302', 'The request failed because maximum file size was exceeded.');
 		}else {
@@ -2459,8 +2442,6 @@ exports.tapCoreMessageManager  = {
                 room: room.roomID
             };
 
-            let _this = this;
-
             let data = {
                 fileName: file.name,
                 mediaType: file.type,
@@ -2469,13 +2450,24 @@ exports.tapCoreMessageManager  = {
             };
 
             this.tapCoreMessageManager.constructTapTalkMessageModel(file.name, room, CHAT_MESSAGE_TYPE_FILE, data, currentLocalID);
-            this.tapCoreMessageManager.constructMessageStatus(true, false, false, false);
-
-            let newMessageFile = Object.assign({}, MESSAGE_MODEL);
             
-            newMessageFile.data = JSON.parse(decryptKey(newMessageFile.data, currentLocalID));
+            let _message = {...MESSAGE_MODEL};
 
-			callback.onStart(newMessageFile);
+            _message.body = file.name;
+            _message.data = data;
+            _message.bytesUpload = 0;
+            _message.percentageUpload = 0;
+            
+            if(tapTalkRooms[_message.room.roomID]) {
+                tapTalkRoomListHashmap[_message.room.roomID].lastMessage = _message;
+				tapTalkRoomListHashmap = Object.assign({[_message.room.roomID]: tapTalkRoomListHashmap[_message.room.roomID]}, tapTalkRoomListHashmap);
+                tapTalkRooms[_message.room.roomID].messages = Object.assign({[_message.localID]: _message}, tapTalkRooms[_message.room.roomID].messages);
+
+            }else {
+                this.tapCoreMessageManager.pushNewRoom(_message);
+            }
+
+            callback.onStart(_message);
 
             this.tapCoreMessageManager.uploadChatFile(uploadData, {
                 onProgress: (percentage, bytes) => {
@@ -2484,22 +2476,23 @@ exports.tapCoreMessageManager  = {
 
                 onSuccess: (response) => {
                     if(response) {
-                        data.fileID = response.fileID;
+                        let _messageForCallback = {..._message};
+                        _messageForCallback.data = response;
+                        _messageForCallback.body = file.name;
+                        
+                        callback.onSuccess(_messageForCallback);
 
-                        _this.tapCoreMessageManager.constructTapTalkMessageModel(file.name, room, CHAT_MESSAGE_TYPE_FILE, data, currentLocalID);
-                        _this.tapCoreMessageManager.constructMessageStatus(true, false, false, false);
-
-                        let emitData = {
-                            eventName: SOCKET_NEW_MESSAGE,
-                            data: MESSAGE_MODEL
-                        };
-
-                        tapEmitMsgQueue.pushEmitQueue(JSON.stringify(emitData));
-
-                        emitData.data.body = decryptKey(emitData.data.body, emitData.data.localID);
-						emitData.data.data = JSON.parse(decryptKey(emitData.data.data, emitData.data.localID));
-                    
-                        callback.onSuccess(emitData.data);
+                        if(isSendEmit) {
+                            let _messageClone = {..._message};
+                            _messageClone.data = encryptKey(JSON.stringify(response), _message.localID);
+                            _messageClone.body = encryptKey(_messageClone.body, _messageClone.localID);
+                            let emitData = {
+                                eventName: SOCKET_NEW_MESSAGE,
+                                data: _messageClone
+                            };
+                            
+                            tapEmitMsgQueue.pushEmitQueue(JSON.stringify(emitData));
+                        }
                     }
                 },
 
@@ -2508,6 +2501,14 @@ exports.tapCoreMessageManager  = {
                 }
             });
         }
+    },
+
+    sendFileMessage : (file, room, callback) => {
+        this.tapCoreMessageManager.actionSendFileMessage(file, room, callback, true);
+    },
+
+    sendFileMessageWithoutEmit : (file, room, callback) => {
+        this.tapCoreMessageManager.actionSendFileMessage(file, room, callback, false);
     },
 
     sendFileMessageQuotedMessage : (file, room, quotedMessage, callback) => {
@@ -2617,7 +2618,7 @@ exports.tapCoreMessageManager  = {
 								}
 								
 								tapTalkRooms[roomID].hasMore = response.data.hasMore;
-								callback.onSuccess(tapTalkRooms[roomID].messages);
+								callback.onSuccess(tapTalkRooms[roomID].messages, response.data.hasMore);
 							}else {
 								if(response.error.code === "40104") {
 									_this.taptalk.refreshAccessToken(() => _this.tapCoreMessageManager.getOlderMessagesBeforeTimestamp(roomID, numberOfItems, callback));
@@ -2630,7 +2631,7 @@ exports.tapCoreMessageManager  = {
 							console.error('there was an error!', err);
 						});
 				}else {
-					callback.onSuccess(tapTalkRooms[roomID].messages);
+                    callback.onSuccess(tapTalkRooms[roomID].messages, tapTalkRooms[roomID].hasMore);
 				}
 			}
         }
@@ -2849,12 +2850,12 @@ exports.tapCoreContactManager  = {
                         userData.user = response.data.user;
                         localStorage.setItem('TapTalk.UserData', encryptKey(JSON.stringify(userData), KEY_PASSWORD_ENCRYPTOR));
 
-                        callback(response.data, null);
+                        callback.onSuccess(response.data);
                     }else {
                         if(response.error.code === "40104") {
                             _this.taptalk.refreshAccessToken(() => _this.tapCoreContactManager.getUserDataWithUserID(userId, null))
                         }else {
-                            callback(null, response.error);
+                            callback.onError(response.error.code, response.error.message);
                         }
                     }
                 })
@@ -2876,12 +2877,12 @@ exports.tapCoreContactManager  = {
             doXMLHTTPRequest('POST', authenticationHeader, url, {xcUserID: xcUserId})
                 .then(function (response) {
                     if(response.error.code === "") {
-                        callback(response.data, null);
+                        callback.onSuccess(response.data);
                     }else {
                         if(response.error.code === "40104") {
                             _this.taptalk.refreshAccessToken(() => _this.tapCoreContactManager.getUserDataWithXCUserID(xcUserId, callback));
                         }else {
-                            callback(null, response.error);
+                            callback.onError(response.error.error, response.error.message);
                         }
                     }
                 })
