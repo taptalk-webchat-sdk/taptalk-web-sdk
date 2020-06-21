@@ -1174,8 +1174,8 @@ exports.tapCoreRoomListManager = {
     },
     
     updateRoomsExist: (message) => {
-        // let decryptedMessage = decryptKey(message.body, message.localID);
-        let decryptedMessage = message.body;
+        let decryptedMessage = decryptKey(message.body, message.localID);
+        // let decryptedMessage = message.body;
         
 		if(!tapTalkRooms[message.room.roomID]["messages"].localID) {
 			tapTalkRooms[message.room.roomID]["messages"][message.localID] = message;
@@ -2259,9 +2259,7 @@ exports.tapCoreMessageManager  = {
                                     let _messageClone = {..._message};
                                     _messageClone.data = encryptKey(JSON.stringify(response), _message.localID);
                                     _messageClone.body = encryptKey(_messageClone.body, _messageClone.localID);
-
-                                    _this.tapCoreMessageManager.pushToTapTalkEmitMessageQueue(_messageClone);
-
+                                    
                                     let emitData = {
                                         eventName: SOCKET_NEW_MESSAGE,
                                         data: _messageClone
@@ -2419,8 +2417,6 @@ exports.tapCoreMessageManager  = {
                                 _messageClone.data = encryptKey(JSON.stringify(response), _message.localID);
                                 _messageClone.body = encryptKey(_messageClone.body, _messageClone.localID);
 
-                                _this.tapCoreMessageManager.pushToTapTalkEmitMessageQueue(_messageClone);
-
                                 let emitData = {
                                     eventName: SOCKET_NEW_MESSAGE,
                                     data: _messageClone
@@ -2537,8 +2533,6 @@ exports.tapCoreMessageManager  = {
                             let _messageClone = {..._message};
                             _messageClone.body = encryptKey(_messageClone.body, _messageClone.localID);
                             _messageClone.data = encryptKey(JSON.stringify(response), _message.localID);
-
-                            this.tapCoreMessageManager.pushToTapTalkEmitMessageQueue(_messageClone);
 
                             let emitData = {
                                 eventName: SOCKET_NEW_MESSAGE,
