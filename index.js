@@ -135,6 +135,13 @@ window.addEventListener('offline', function() {
 });
 //listen connection status
 
+function bytesToSize(bytes) {
+    var sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    if (bytes == 0) return '0 Byte';
+    var i = parseInt(Math.floor(Math.log(bytes) / Math.log(1024)));
+    return (bytes / Math.pow(1024, i)).toFixed(2).replace('.00', '') + ' ' + sizes[i];
+}
+
 function getDeviceID() {
 	let localDeviceID = localStorage.getItem('tapTalk.DeviceID');
 
@@ -653,6 +660,14 @@ class TapEmitMessageQueue {
 var tapEmitMsgQueue = new TapEmitMessageQueue();
 
 //image compress
+var urlToFile = (url, filename, mimeType) => {
+	return (
+		fetch(url)
+			.then(function (res) { return res.arrayBuffer(); })
+			.then(function (buf) { return new File([buf], filename, { type: mimeType }); })
+	);
+};
+
 let compressImageFile = (file, widthVal, heightVal) => {
     return new Promise(function (resolve, reject) {;
         let fileName = file.name;
@@ -686,7 +701,13 @@ let compressImageFile = (file, widthVal, heightVal) => {
         };
 
         readerCanvasImage.onload = event => {
-            resolve(event.target.result);
+            urlToFile(event.target.result, file.name, file.type)
+    			.then((file) => { 
+					resolve({
+						file: file,
+						src: event.target.result
+					})
+				});
         }
     })
 }
@@ -1153,8 +1174,8 @@ exports.tapCoreRoomListManager = {
     },
     
     updateRoomsExist: (message) => {
-        let decryptedMessage = decryptKey(message.body, message.localID);
-        // let decryptedMessage = message.body;
+        // let decryptedMessage = decryptKey(message.body, message.localID);
+        let decryptedMessage = message.body;
         
 		if(!tapTalkRooms[message.room.roomID]["messages"].localID) {
 			tapTalkRooms[message.room.roomID]["messages"][message.localID] = message;
@@ -2143,98 +2164,121 @@ exports.tapCoreMessageManager  = {
     },
 
     actionSendImageMessage : (file, caption, room, callback, isSendEmit) => {
-        let imageWidth = "";
-		let imageHeight = "";
-		let _URL = window.URL || window.webkitURL;
-		let img = new Image();
+        if(file.size > projectConfigs.core.chatMediaMaxFileSize) {
+            callback.onError('90302', "Maximum file size is"+bytesToSize(projectConfigs.core.chatMediaMaxFileSize));
+        }else {
+            let bodyValueImage = `${caption !== "" ? `🖼 ${caption}` : '🖼 Photo'}`;
+            const MAX_IMAGE_HEIGHT = 2000;
+			const MAX_IMAGE_WIDTH = 2000;
+            let imageWidth = "";
+            let imageHeight = "";
+            let aspectRatio = "";
+            let _URL = window.URL || window.webkitURL;
+            let img = new Image();
 
-		img.onload = function () {
-			imageWidth = this.width;
-			imageHeight = this.height;
-		};
-		
-		img.src = _URL.createObjectURL(file);
+            img.onload = function () {
+				aspectRatio = this.width / this.height;
+				imageHeight = this.height;
+				imageWidth = this.width;
+				//check image width and height
+				if(imageWidth > MAX_IMAGE_WIDTH) {
+					imageWidth = 2000;
+					imageHeight = Math.floor(imageWidth / aspectRatio);
+				}
+				
+				if(imageHeight > MAX_IMAGE_HEIGHT) {
+					imageHeight = 2000;
+					imageWidth = Math.floor(imageHeight * aspectRatio);
+				}
+				//check image width and height
+			};
+            
+            img.src = _URL.createObjectURL(file);
 
-		let _this = this;
+            let _this = this;
 
-		compressImageFile(file, 20, 20).then(function(imageCompressResult) {
-			if(file.size > projectConfigs.core.chatMediaMaxFileSize) {
-				callback.onError('90302', 'The request failed because maximum file size was exceeded.');
-			}else {
-                let currentLocalID = guid();
+            compressImageFile(file, 20, 20).then(function(resultThumbnail) {
+				let thumbnailImage = resultThumbnail.src;
+				
+				compressImageFile(file, imageWidth, imageHeight).then(function(resultOriginal) {
+                    let currentLocalID = guid();
 
-                let uploadData = {
-                    file: file,
-                    caption: caption,
-                    room: room.roomID
-                };
-    
-                let data = {
-					fileName: file.name,
-					mediaType: file.type,
-					size: file.size,
-					fileID: "",
-					thumbnail: imageCompressResult.split(',')[1],
-					width: imageWidth,
-					height: imageHeight,
-					fileUri: "",
-					caption: caption
-				};
-    
-                _this.tapCoreMessageManager.constructTapTalkMessageModel(file.name, room, CHAT_MESSAGE_TYPE_IMAGE, data, currentLocalID);
-                
-                let _message = {...MESSAGE_MODEL};
-    
-                _message.body = file.name;
-                _message.data = data;
-                _message.bytesUpload = 0;
-                _message.percentageUpload = 0;
-                
-                if(tapTalkRooms[_message.room.roomID]) {
-                    tapTalkRoomListHashmap[_message.room.roomID].lastMessage = _message;
-                    tapTalkRoomListHashmap = Object.assign({[_message.room.roomID]: tapTalkRoomListHashmap[_message.room.roomID]}, tapTalkRoomListHashmap);
-                    tapTalkRooms[_message.room.roomID].messages = Object.assign({[_message.localID]: _message}, tapTalkRooms[_message.room.roomID].messages);
-    
-                }else {
-                    _this.tapCoreMessageManager.pushNewRoom(_message);
-                }
-    
-                callback.onStart(_message);
-                
-				_this.tapCoreMessageManager.uploadChatFile(uploadData, {
-					onProgress: (percentage, bytes) => {
-						callback.onProgress(currentLocalID, percentage, bytes);
-					},
-		
-					onSuccess: (response) => {
-                        if(response) {
-                            let _messageForCallback = {..._message};
-                            response.thumbnail = imageCompressResult.split(',')[1];
-                            _messageForCallback.data = response;
-                            _messageForCallback.body = file.name;
-                            
-                            callback.onSuccess(_messageForCallback);
-    
-                            if(isSendEmit) {
-                                let _messageClone = {..._message};
-                                _messageClone.data = encryptKey(JSON.stringify(response), _message.localID);
-                                _messageClone.body = encryptKey(_messageClone.body, _messageClone.localID);
-                                let emitData = {
-                                    eventName: SOCKET_NEW_MESSAGE,
-                                    data: _messageClone
-                                };
+                    let uploadData = {
+                        file: resultOriginal.file,
+                        caption: caption,
+                        room: room.roomID
+                    };
+
+                    let data = {
+                        fileName: file.name,
+                        mediaType: file.type,
+                        size: file.size,
+                        fileID: "",
+                        thumbnail: thumbnailImage.split(',')[1],
+                        width: imageWidth,
+                        height: imageHeight,
+                        caption: caption
+                    };
+
+                    _this.tapCoreMessageManager.constructTapTalkMessageModel(bodyValueImage, room, CHAT_MESSAGE_TYPE_IMAGE, data, currentLocalID);
+                    
+                    let _message = {...MESSAGE_MODEL};
+
+                    _message.body = bodyValueImage;
+                    _message.data = data;
+                    _message.bytesUpload = 0;
+                    _message.percentageUpload = 0;
+                    
+                    if(tapTalkRooms[_message.room.roomID]) {
+                        tapTalkRoomListHashmap[_message.room.roomID].lastMessage = _message;
+                        tapTalkRoomListHashmap = Object.assign({[_message.room.roomID]: tapTalkRoomListHashmap[_message.room.roomID]}, tapTalkRoomListHashmap);
+                        tapTalkRooms[_message.room.roomID].messages = Object.assign({[_message.localID]: _message}, tapTalkRooms[_message.room.roomID].messages);
+
+                    }else {
+                        _this.tapCoreMessageManager.pushNewRoom(_message);
+                    }
+
+                    callback.onStart(_message);
+                    
+                    _this.tapCoreMessageManager.uploadChatFile(uploadData, {
+                        onProgress: (percentage, bytes) => {
+                            callback.onProgress(currentLocalID, percentage, bytes);
+                        },
+            
+                        onSuccess: (response) => {
+                            if(response) {
+                                response.fileName = file.name;
+                                let _messageForCallback = {..._message};
+                                response.thumbnail = thumbnailImage.split(',')[1];
+                                _messageForCallback.data = response;
+                                _messageForCallback.body = bodyValueImage;
                                 
-                                tapEmitMsgQueue.pushEmitQueue(JSON.stringify(emitData));
+                                callback.onSuccess(_messageForCallback);
+
+                                if(isSendEmit) {
+                                    let _messageClone = {..._message};
+                                    _messageClone.data = encryptKey(JSON.stringify(response), _message.localID);
+                                    _messageClone.body = encryptKey(_messageClone.body, _messageClone.localID);
+
+                                    _this.tapCoreMessageManager.pushToTapTalkEmitMessageQueue(_messageClone);
+
+                                    let emitData = {
+                                        eventName: SOCKET_NEW_MESSAGE,
+                                        data: _messageClone
+                                    };
+                                    
+                                    tapEmitMsgQueue.pushEmitQueue(JSON.stringify(emitData));
+                                }
                             }
+                        },
+            
+                        onError: (errorCode, errorMessage) => {
+                            callback.onError(errorCode, errorMessage);
                         }
-					},
-		
-					onError: (errorCode, errorMessage) => {
-						callback.onError(errorCode, errorMessage);
-					}
-				});
-			}
-		})
+                    });
+                })
+            })
+        }
     },
 
     sendImageMessage : (file, caption, room, callback) => {
@@ -2278,40 +2322,41 @@ exports.tapCoreMessageManager  = {
     },
 
     actionSendVideoMessage : (file, caption, room, callback, isSendEmit) => {
-        let _this = this;
+        if(file.size > projectConfigs.core.chatMediaMaxFileSize) {
+            callback.onError('90302', "Maximum file size is"+bytesToSize(projectConfigs.core.chatMediaMaxFileSize));
+        }else {
+            let bodyValueVideo = `${caption !== "" ? `🎥 ${caption}` : '🎥 Video'}`;
+            let _this = this;
 
-		let videoMetaData = (file) => {
-			return new Promise(function(resolve, reject) {
-				let video = document.createElement('video');
-				// video.preload = 'metadata';
+            let videoMetaData = (file) => {
+                return new Promise(function(resolve, reject) {
+                    let video = document.createElement('video');
+                    // video.preload = 'metadata';
 
-				video.onloadedmetadata = function() {
-					window.URL.revokeObjectURL(video.src);
-					
-					resolve({
-						video: video,
-						duration: Math.round(video.duration * 1000),
-						height: video.videoHeight,
-						width: video.videoWidth
-					})
-				}
+                    video.onloadedmetadata = function() {
+                        window.URL.revokeObjectURL(video.src);
+                        
+                        resolve({
+                            video: video,
+                            duration: Math.round(video.duration * 1000),
+                            height: video.videoHeight,
+                            width: video.videoWidth
+                        })
+                    }
 
-				video.src = URL.createObjectURL(file);
-			})
-		}
+                    video.src = URL.createObjectURL(file);
+                })
+            }
 
-		videoMetaData(file).then(function(value) {
-			let videoCanvas = document.createElement('canvas');
-            videoCanvas.height = value.height;
-            videoCanvas.width = value.width;
-            videoCanvas.getContext('2d').drawImage(value.video, 0, 0)
-            // var snapshot = videoCanvas.toDataURL();
-            let videoThumbnail = "iVBORw0KGgoAAAANSUhEUgAAACQAAAApCAYAAABdnotGAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsIAAA7CARUoSoAAAABKSURBVFhH7c4hDsAwEASxS///5zag3PTAWFotnTMz790az/9rFCQFSUFSkBQkBUlBUpAUJAVJQVKQFCQFSUFSkBQkBUlBsixo5gPuqwFROINNBAAAAABJRU5ErkJggg==";
+            videoMetaData(file).then(function(value) {
+                let videoCanvas = document.createElement('canvas');
+                videoCanvas.height = value.height;
+                videoCanvas.width = value.width;
+                videoCanvas.getContext('2d').drawImage(value.video, 0, 0)
+                // var snapshot = videoCanvas.toDataURL();
+                let videoThumbnail = "iVBORw0KGgoAAAANSUhEUgAAACQAAAApCAYAAABdnotGAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsIAAA7CARUoSoAAAABKSURBVFhH7c4hDsAwEASxS///5zag3PTAWFotnTMz790az/9rFCQFSUFSkBQkBUlBUpAUJAVJQVKQFCQFSUFSkBQkBUlBsixo5gPuqwFROINNBAAAAABJRU5ErkJggg==";
 
-			if(file.size > projectConfigs.core.chatMediaMaxFileSize) {
-				callback.onError('90302', 'The request failed because maximum file size was exceeded.');
-			}else {
-				let currentLocalID = guid();
+                let currentLocalID = guid();
 
                 let uploadData = {
                     file: file,
@@ -2320,22 +2365,22 @@ exports.tapCoreMessageManager  = {
                 };
     
                 let data = {
-					fileName: file.name,
-					mediaType: file.type,
-					size: file.size,
-					fileID: "",
-					thumbnail: videoThumbnail,
-					width: value.width,
-					height: value.height,
-					caption: caption,
-					duration: value.duration
-				};
+                    fileName: file.name,
+                    mediaType: file.type,
+                    size: file.size,
+                    fileID: "",
+                    thumbnail: videoThumbnail,
+                    width: value.width,
+                    height: value.height,
+                    caption: caption,
+                    duration: value.duration
+                };
     
-                _this.tapCoreMessageManager.constructTapTalkMessageModel(file.name, room, CHAT_MESSAGE_TYPE_VIDEO, data, currentLocalID);
+                _this.tapCoreMessageManager.constructTapTalkMessageModel(bodyValueVideo, room, CHAT_MESSAGE_TYPE_VIDEO, data, currentLocalID);
                 
                 let _message = {...MESSAGE_MODEL};
     
-                _message.body = file.name;
+                _message.body = bodyValueVideo;
                 _message.data = data;
                 _message.bytesUpload = 0;
                 _message.percentageUpload = 0;
@@ -2350,21 +2395,22 @@ exports.tapCoreMessageManager  = {
                 }
     
                 callback.onStart(_message);
-		
-				_this.tapCoreMessageManager.uploadChatFile(uploadData, {
-					onProgress: (percentage, bytes) => {
-						callback.onProgress(currentLocalID, percentage, bytes);
-					},
-		
-					onSuccess: (response) => {
+        
+                _this.tapCoreMessageManager.uploadChatFile(uploadData, {
+                    onProgress: (percentage, bytes) => {
+                        callback.onProgress(currentLocalID, percentage, bytes);
+                    },
+        
+                    onSuccess: (response) => {
                         if(response) {
+                            response.fileName = file.name;
                             let _messageForCallback = {..._message};
                             response.thumbnail = videoThumbnail;
                             response.width = value.width;
                             response.height = value.height;
                             response.duration = value.duration;
                             _messageForCallback.data = response;
-                            _messageForCallback.body = file.name;
+                            _messageForCallback.body = bodyValueVideo;
                             
                             callback.onSuccess(_messageForCallback);
     
@@ -2372,6 +2418,9 @@ exports.tapCoreMessageManager  = {
                                 let _messageClone = {..._message};
                                 _messageClone.data = encryptKey(JSON.stringify(response), _message.localID);
                                 _messageClone.body = encryptKey(_messageClone.body, _messageClone.localID);
+
+                                _this.tapCoreMessageManager.pushToTapTalkEmitMessageQueue(_messageClone);
+
                                 let emitData = {
                                     eventName: SOCKET_NEW_MESSAGE,
                                     data: _messageClone
@@ -2380,14 +2429,14 @@ exports.tapCoreMessageManager  = {
                                 tapEmitMsgQueue.pushEmitQueue(JSON.stringify(emitData));
                             }
                         }
-					},
-		
-					onError: (errorCode, errorMessage) => {
-						callback.onError(errorCode, errorMessage);
-					}
-				});
-			}
-		})
+                    },
+        
+                    onError: (errorCode, errorMessage) => {
+                        callback.onError(errorCode, errorMessage);
+                    }
+                });
+            })
+        }
     },
     
     sendVideoMessage : (file, caption, room, callback) => {
@@ -2432,9 +2481,10 @@ exports.tapCoreMessageManager  = {
 
     actionSendFileMessage : (file, room, callback, isSendEmit) => {
         if(file.size > projectConfigs.core.chatMediaMaxFileSize) {
-			callback.onError('90302', 'The request failed because maximum file size was exceeded.');
-		}else {
+            callback.onError('90302', "Maximum file size is"+bytesToSize(projectConfigs.core.chatMediaMaxFileSize));
+        }else {
             let currentLocalID = guid();
+            let bodyValue = `📎 ${file.name}`;
 
             let uploadData = {
                 file: file,
@@ -2449,11 +2499,11 @@ exports.tapCoreMessageManager  = {
                 fileID: ""
             };
 
-            this.tapCoreMessageManager.constructTapTalkMessageModel(file.name, room, CHAT_MESSAGE_TYPE_FILE, data, currentLocalID);
+            this.tapCoreMessageManager.constructTapTalkMessageModel(bodyValue, room, CHAT_MESSAGE_TYPE_FILE, data, currentLocalID);
             
             let _message = {...MESSAGE_MODEL};
 
-            _message.body = file.name;
+            _message.body = bodyValue;
             _message.data = data;
             _message.bytesUpload = 0;
             _message.percentageUpload = 0;
@@ -2476,16 +2526,20 @@ exports.tapCoreMessageManager  = {
 
                 onSuccess: (response) => {
                     if(response) {
+                        response.fileName = file.name;
                         let _messageForCallback = {..._message};
                         _messageForCallback.data = response;
-                        _messageForCallback.body = file.name;
+                        _messageForCallback.body = bodyValue;
                         
                         callback.onSuccess(_messageForCallback);
 
                         if(isSendEmit) {
                             let _messageClone = {..._message};
-                            _messageClone.data = encryptKey(JSON.stringify(response), _message.localID);
                             _messageClone.body = encryptKey(_messageClone.body, _messageClone.localID);
+                            _messageClone.data = encryptKey(JSON.stringify(response), _message.localID);
+
+                            this.tapCoreMessageManager.pushToTapTalkEmitMessageQueue(_messageClone);
+
                             let emitData = {
                                 eventName: SOCKET_NEW_MESSAGE,
                                 data: _messageClone
