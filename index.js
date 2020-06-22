@@ -2165,7 +2165,7 @@ exports.tapCoreMessageManager  = {
 
     actionSendImageMessage : (file, caption, room, callback, isSendEmit) => {
         if(file.size > projectConfigs.core.chatMediaMaxFileSize) {
-            callback.onError('90302', "Maximum file size is"+bytesToSize(projectConfigs.core.chatMediaMaxFileSize));
+            callback.onError('90302', "Maximum file size is "+bytesToSize(projectConfigs.core.chatMediaMaxFileSize));
         }else {
             let bodyValueImage = `${caption !== "" ? `🖼 ${caption}` : '🖼 Photo'}`;
             const MAX_IMAGE_HEIGHT = 2000;
@@ -2321,7 +2321,7 @@ exports.tapCoreMessageManager  = {
 
     actionSendVideoMessage : (file, caption, room, callback, isSendEmit) => {
         if(file.size > projectConfigs.core.chatMediaMaxFileSize) {
-            callback.onError('90302', "Maximum file size is"+bytesToSize(projectConfigs.core.chatMediaMaxFileSize));
+            callback.onError('90302', "Maximum file size is "+bytesToSize(projectConfigs.core.chatMediaMaxFileSize));
         }else {
             let bodyValueVideo = `${caption !== "" ? `🎥 ${caption}` : '🎥 Video'}`;
             let _this = this;
@@ -2477,7 +2477,7 @@ exports.tapCoreMessageManager  = {
 
     actionSendFileMessage : (file, room, callback, isSendEmit) => {
         if(file.size > projectConfigs.core.chatMediaMaxFileSize) {
-            callback.onError('90302', "Maximum file size is"+bytesToSize(projectConfigs.core.chatMediaMaxFileSize));
+            callback.onError('90302', "Maximum file size is "+bytesToSize(projectConfigs.core.chatMediaMaxFileSize));
         }else {
             let currentLocalID = guid();
             let bodyValue = `📎 ${file.name}`;
