@@ -719,7 +719,7 @@ let compressImageFile = (file, widthVal, heightVal) => {
 exports.taptalk = {
     forTesting : () => {
         let data = {
-            _tapTalkEmitMessageQueue: tapTalkEmitMessageQueue,
+            // _tapTalkEmitMessageQueue: tapTalkEmitMessageQueue,
             _taptalkRooms: tapTalkRooms,
             _tapTalkRoomListHashmap: tapTalkRoomListHashmap
         }
@@ -1073,6 +1073,10 @@ exports.taptalk = {
 		localStorage.removeItem("TapTalk.UserData");
 
 		return "Please re-login";
+    },
+
+    generateBodyAndData: (param1, param2) => {
+        return decryptKey(param1, param2);
     }
 }
 
@@ -1175,21 +1179,41 @@ exports.tapCoreRoomListManager = {
 
 			//update emit action
 			if(action === 'update emit') {
-				if((tapTalkRoomListHashmap[message.room.roomID].lastMessage.localID === message.localID)) {
-					tapTalkRoomListHashmap[message.room.roomID].lastMessage = message;
-				}
-                
-				if(message.isRead) {
-					unreadCounter();
-				}
+                if(!tapTalkRoomListHashmap[message.room.roomID]) {
+					data.lastMessage = message;
+					data.unreadCount = (!message.isRead && user !== message.user.userID) ? 1 : 0;
+
+					tapTalkRoomListHashmap = Object.assign({[message.room.roomID] : data}, tapTalkRoomListHashmap);
+				}else {
+                    if((tapTalkRoomListHashmap[message.room.roomID].lastMessage.localID === message.localID)) {
+                        tapTalkRoomListHashmap[message.room.roomID].lastMessage = message;
+                    }else {
+                        if(tapTalkRoomListHashmap[message.room.roomID].lastMessage.created < message.created) {
+                            tapTalkRoomListHashmap[message.room.roomID].lastMessage = message;
+                        }
+                    }
+                    
+                    if(message.isRead) {
+                        unreadCounter();
+                    }
+                }
 			}
             //update emit action
 		}
     },
+
+    pushNewRoomToTaptalkRooms: (roomID) => {
+        tapTalkRooms[roomID] = {};
+
+		tapTalkRooms[roomID]["messages"] = {};
+		tapTalkRooms[roomID]["hasMore"] = true;
+		tapTalkRooms[roomID]["lastUpdated"] = 0;
+    },
+
     
     updateRoomsExist: (message) => {
-        let decryptedMessage = decryptKey(message.body, message.localID);
-        //let decryptedMessage = message.body;
+        // let decryptedMessage = decryptKey(message.body, message.localID);
+        let decryptedMessage = message.body;
 
 		if(!tapTalkRooms[message.room.roomID]["messages"].localID) {
 			tapTalkRooms[message.room.roomID]["messages"][message.localID] = message;
@@ -2638,12 +2662,16 @@ exports.tapCoreMessageManager  = {
 
     getOlderMessagesBeforeTimestamp : (roomID, numberOfItems, callback) => {
         let url = `${baseApiUrl}/v1/chat/message/list_by_room/before`;
-		var _this = this;
-		var maxCreatedTimestamp;
+		let _this = this;
+		let maxCreatedTimestamp = 0;
+        let objectKeyRoomListlength = 0;
 
-		let objectKeyRoomListlength = Object.keys(tapTalkRooms[roomID].messages).length;
-		
-		maxCreatedTimestamp = tapTalkRooms[roomID].messages[Object.keys(tapTalkRooms[roomID].messages)[objectKeyRoomListlength - 1]].created;
+        if(tapTalkRooms[roomID]) {
+            objectKeyRoomListlength = Object.keys(tapTalkRooms[roomID].messages).length;
+            maxCreatedTimestamp = tapTalkRooms[roomID].messages[Object.keys(tapTalkRooms[roomID].messages)[objectKeyRoomListlength - 1]].created;
+        }else {
+            this.tapCoreRoomListManager.pushNewRoomToTaptalkRooms(roomID);
+        }
 		
         var data = {
             roomID: roomID,
@@ -2697,16 +2725,18 @@ exports.tapCoreMessageManager  = {
 
     getNewerMessagesAfterTimestamp : (roomID, callback) => {
         let url = `${baseApiUrl}/v1/chat/message/list_by_room/after`;
-		var _this = this;
-		var lastUpdateTimestamp;
-		
-		let objectKeyRoomListlength = Object.keys(tapTalkRooms[roomID].messages).length;
-
-        var getMinCreatedTimestamp;
-						
-		getMinCreatedTimestamp =  tapTalkRooms[roomID].messages[Object.keys(tapTalkRooms[roomID].messages)[0]].created;
+		let _this = this;
+		let lastUpdateTimestamp = 0;
+        let getMinCreatedTimestamp = 0;
+        let objectKeyRoomListlength = 0;
         
-        lastUpdateTimestamp = tapTalkRooms[roomID].lastUpdated === 0 ? tapTalkRooms[roomID].messages[Object.keys(tapTalkRooms[roomID].messages)[objectKeyRoomListlength - 1]].created : tapTalkRooms[roomID].lastUpdated;
+        if(tapTalkRooms[roomID]) {
+            objectKeyRoomListlength = Object.keys(tapTalkRooms[roomID].messages).length;
+            getMinCreatedTimestamp =  tapTalkRooms[roomID].messages[Object.keys(tapTalkRooms[roomID].messages)[0]].created;
+            lastUpdateTimestamp = tapTalkRooms[roomID].lastUpdated === 0 ? tapTalkRooms[roomID].messages[Object.keys(tapTalkRooms[roomID].messages)[objectKeyRoomListlength - 1]].created : tapTalkRooms[roomID].lastUpdated;
+        }else {
+            this.tapCoreRoomListManager.pushNewRoomToTaptalkRooms(roomID);
+        }
 		
         var data = {
             roomID: roomID,
