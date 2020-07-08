@@ -567,25 +567,29 @@ var handleNewMessage = (message) => {
 }
 
 var handleUpdateMessage = (message) => {
+    let isRoomExist = tapTalkRooms[message.room.roomID];
+    
     message.body = decryptKey(message.body, message.localID);
-
-	if(message.data !== "") {
-		message.data = JSON.parse(decryptKey(message.data, message.localID));
+    
+    if(message.data !== "") {
+        message.data = JSON.parse(decryptKey(message.data, message.localID));
     }
     
     if(message.replyTo.localID !== "") {
-		message.quote.content = decryptKey(message.quote.content, message.localID);
-	}
+        message.quote.content = decryptKey(message.quote.content, message.localID);
+    }
 
-    tapTalkRooms[message.room.roomID].messages[message.localID] = message;
-	
-	if(message.isRead) {
-		for(var i in tapTalkRooms[message.room.roomID].messages) {
-			tapTalkRooms[message.room.roomID].messages[i].isRead = true;
-		}
-	}
-
-	module.exports.tapCoreRoomListManager.setRoomListLastMessage(message, 'update emit');
+    if(isRoomExist) {
+        tapTalkRooms[message.room.roomID].messages[message.localID] = message;
+        
+        if(message.isRead) {
+            for(var i in tapTalkRooms[message.room.roomID].messages) {
+                tapTalkRooms[message.room.roomID].messages[i].isRead = true;
+            }
+        }
+    
+        module.exports.tapCoreRoomListManager.setRoomListLastMessage(message, 'update emit');
+    }
 }
 
 class TapMessageQueue {
@@ -1103,7 +1107,7 @@ exports.tapCoreRoomListManager = {
 		
 		return arrayMessage;
     },
-
+    
     setRoomListLastMessage: (message, action = null) => {
 		var user = this.taptalk.getTaptalkActiveUser().userID;
 
@@ -1158,7 +1162,7 @@ exports.tapCoreRoomListManager = {
             //new emit action
 			if(action === 'new emit') {
 				if(!tapTalkRoomListHashmap[message.room.roomID]) {
-					data.lastMessage = message;
+                    data.lastMessage = message;
 					data.unreadCount = (!message.isRead && user !== message.user.userID) ? 1 : 0;
 
 					tapTalkRoomListHashmap = Object.assign({[message.room.roomID] : data}, tapTalkRoomListHashmap);
@@ -1180,7 +1184,7 @@ exports.tapCoreRoomListManager = {
 			//update emit action
 			if(action === 'update emit') {
                 if(!tapTalkRoomListHashmap[message.room.roomID]) {
-					data.lastMessage = message;
+                    data.lastMessage = message;
 					data.unreadCount = (!message.isRead && user !== message.user.userID) ? 1 : 0;
 
 					tapTalkRoomListHashmap = Object.assign({[message.room.roomID] : data}, tapTalkRoomListHashmap);
@@ -1207,7 +1211,7 @@ exports.tapCoreRoomListManager = {
 
 		tapTalkRooms[roomID]["messages"] = {};
 		tapTalkRooms[roomID]["hasMore"] = true;
-		tapTalkRooms[roomID]["lastUpdated"] = 0;
+        tapTalkRooms[roomID]["lastUpdated"] = 0;
     },
 
     
@@ -2008,12 +2012,21 @@ exports.tapCoreMessageManager  = {
         MESSAGE_MODEL["isDeleted"] = isDeleted;
     },
 
-    pushNewRoom: (messageModel) => {
-		let user = this.taptalk.getTaptalkActiveUser().userID;
-		let newRoomListHashmap = {
+    pushNewRoomList: (messageModel) => {
+        let newRoomListHashmap = {
 			lastMessage: {},
 			unreadCount: 0
-		}
+        }
+        
+        newRoomListHashmap.lastMessage = messageModel;
+		newRoomListHashmap.unreadCount = (!messageModel.isRead && user !== messageModel.user.userID) ? 1 : 0;
+
+		tapTalkRoomListHashmap = Object.assign({[messageModel.room.roomID] : newRoomListHashmap}, tapTalkRoomListHashmap);
+    },
+
+    pushNewRoom: (messageModel) => {
+        let user = this.taptalk.getTaptalkActiveUser().userID;
+        
 		let newTaptalkRoom = {
 			messages: {},
 			hasMore: true,
@@ -2024,10 +2037,7 @@ exports.tapCoreMessageManager  = {
 
 		tapTalkRooms[messageModel.room.roomID].messages[messageModel.localID] = messageModel;
 
-		newRoomListHashmap.lastMessage = messageModel;
-		newRoomListHashmap.unreadCount = (!messageModel.isRead && user !== messageModel.user.userID) ? 1 : 0;
-
-		tapTalkRoomListHashmap = Object.assign({[messageModel.room.roomID] : newRoomListHashmap}, tapTalkRoomListHashmap);
+		this.tapCoreMessageManager.pushNewRoomList(messageModel);
     },
     
     pushToTapTalkEmitMessageQueue(message) {
@@ -2041,6 +2051,23 @@ exports.tapCoreMessageManager  = {
 		// tapTalkEmitMessageQueue
     },
     
+    pushNewMessageToRoomsAndChangeLastMessage : (message) => {
+        let _message = {...message};
+
+        if(tapTalkRooms[_message.room.roomID]) {
+            if(tapTalkRoomListHashmap[_message.room.roomID]) {
+                tapTalkRoomListHashmap[_message.room.roomID].lastMessage = _message;
+                tapTalkRoomListHashmap = Object.assign({[_message.room.roomID]: tapTalkRoomListHashmap[_message.room.roomID]}, tapTalkRoomListHashmap);
+            }else {
+                this.tapCoreRoomListManager.setRoomListLastMessage(_message, "new emit")
+            }
+
+            tapTalkRooms[_message.room.roomID].messages = Object.assign({[_message.localID]: _message}, tapTalkRooms[_message.room.roomID].messages);
+        }else {
+            this.tapCoreMessageManager.pushNewRoom(_message);
+        }
+    },
+
     sendTextMessageWithoutEmit : (messageBody, room, callback) => {
         if(this.taptalk.isAuthenticated()) {
             this.tapCoreMessageManager.constructTapTalkMessageModel(messageBody, room, CHAT_MESSAGE_TYPE_TEXT, "");
@@ -2049,17 +2076,12 @@ exports.tapCoreMessageManager  = {
 
             _message.body = messageBody;
             
-            if(tapTalkRooms[_message.room.roomID]) {
-                tapTalkRoomListHashmap[_message.room.roomID].lastMessage = _message;
-				tapTalkRoomListHashmap = Object.assign({[_message.room.roomID]: tapTalkRoomListHashmap[_message.room.roomID]}, tapTalkRoomListHashmap);
-                tapTalkRooms[_message.room.roomID].messages = Object.assign({[_message.localID]: _message}, tapTalkRooms[_message.room.roomID].messages);
-            }else {
-                this.tapCoreMessageManager.pushNewRoom(_message);
-            }
+            this.tapCoreMessageManager.pushNewMessageToRoomsAndChangeLastMessage(_message);
 
             callback(_message);
         }
     },
+
 
     sendTextMessage : (messageBody, room, callback) => {
         if(this.taptalk.isAuthenticated()) {
@@ -2076,13 +2098,7 @@ exports.tapCoreMessageManager  = {
         
             // this.tapCoreMessageManager.pushToTapTalkEmitMessageQueue(_message);
 
-            if(tapTalkRooms[_message.room.roomID]) {
-                tapTalkRoomListHashmap[_message.room.roomID].lastMessage = _message;
-				tapTalkRoomListHashmap = Object.assign({[_message.room.roomID]: tapTalkRoomListHashmap[_message.room.roomID]}, tapTalkRoomListHashmap);
-                tapTalkRooms[_message.room.roomID].messages = Object.assign({[_message.localID]: _message}, tapTalkRooms[_message.room.roomID].messages);
-            }else {
-                this.tapCoreMessageManager.pushNewRoom(_message);
-            }
+            this.tapCoreMessageManager.pushNewMessageToRoomsAndChangeLastMessage(_message);
 
             callback(_message);
                 
@@ -2259,14 +2275,7 @@ exports.tapCoreMessageManager  = {
                     _message.bytesUpload = 0;
                     _message.percentageUpload = 0;
                     
-                    if(tapTalkRooms[_message.room.roomID]) {
-                        tapTalkRoomListHashmap[_message.room.roomID].lastMessage = _message;
-                        tapTalkRoomListHashmap = Object.assign({[_message.room.roomID]: tapTalkRoomListHashmap[_message.room.roomID]}, tapTalkRoomListHashmap);
-                        tapTalkRooms[_message.room.roomID].messages = Object.assign({[_message.localID]: _message}, tapTalkRooms[_message.room.roomID].messages);
-
-                    }else {
-                        _this.tapCoreMessageManager.pushNewRoom(_message);
-                    }
+                    _this.tapCoreMessageManager.pushNewMessageToRoomsAndChangeLastMessage(_message);
 
                     callback.onStart(_message);
                     
@@ -2415,15 +2424,8 @@ exports.tapCoreMessageManager  = {
                 _message.bytesUpload = 0;
                 _message.percentageUpload = 0;
                 
-                if(tapTalkRooms[_message.room.roomID]) {
-                    tapTalkRoomListHashmap[_message.room.roomID].lastMessage = _message;
-                    tapTalkRoomListHashmap = Object.assign({[_message.room.roomID]: tapTalkRoomListHashmap[_message.room.roomID]}, tapTalkRoomListHashmap);
-                    tapTalkRooms[_message.room.roomID].messages = Object.assign({[_message.localID]: _message}, tapTalkRooms[_message.room.roomID].messages);
-    
-                }else {
-                    _this.tapCoreMessageManager.pushNewRoom(_message);
-                }
-    
+                _this.tapCoreMessageManager.pushNewMessageToRoomsAndChangeLastMessage(_message);
+                
                 callback.onStart(_message);
         
                 _this.tapCoreMessageManager.uploadChatFile(uploadData, {
@@ -2538,14 +2540,7 @@ exports.tapCoreMessageManager  = {
             _message.bytesUpload = 0;
             _message.percentageUpload = 0;
             
-            if(tapTalkRooms[_message.room.roomID]) {
-                tapTalkRoomListHashmap[_message.room.roomID].lastMessage = _message;
-				tapTalkRoomListHashmap = Object.assign({[_message.room.roomID]: tapTalkRoomListHashmap[_message.room.roomID]}, tapTalkRoomListHashmap);
-                tapTalkRooms[_message.room.roomID].messages = Object.assign({[_message.localID]: _message}, tapTalkRooms[_message.room.roomID].messages);
-
-            }else {
-                this.tapCoreMessageManager.pushNewRoom(_message);
-            }
+            this.tapCoreMessageManager.pushNewMessageToRoomsAndChangeLastMessage(_message);
 
             callback.onStart(_message);
 
