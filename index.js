@@ -1216,8 +1216,8 @@ exports.tapCoreRoomListManager = {
 
     
     updateRoomsExist: (message) => {
-        // let decryptedMessage = decryptKey(message.body, message.localID);
-        let decryptedMessage = message.body;
+        let decryptedMessage = decryptKey(message.body, message.localID);
+        // let decryptedMessage = message.body;
 
 		if(!tapTalkRooms[message.room.roomID]["messages"].localID) {
 			tapTalkRooms[message.room.roomID]["messages"][message.localID] = message;
