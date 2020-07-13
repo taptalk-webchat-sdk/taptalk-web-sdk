@@ -2661,7 +2661,7 @@ exports.tapCoreMessageManager  = {
 		let maxCreatedTimestamp = 0;
         let objectKeyRoomListlength = 0;
 
-        if(tapTalkRooms[roomID]) {
+        if(tapTalkRooms[roomID] && Object.keys(tapTalkRooms[roomID].messages).length > 0) {
             objectKeyRoomListlength = Object.keys(tapTalkRooms[roomID].messages).length;
             maxCreatedTimestamp = tapTalkRooms[roomID].messages[Object.keys(tapTalkRooms[roomID].messages)[objectKeyRoomListlength - 1]].created;
         }else {
@@ -2725,7 +2725,7 @@ exports.tapCoreMessageManager  = {
         let getMinCreatedTimestamp = 0;
         let objectKeyRoomListlength = 0;
         
-        if(tapTalkRooms[roomID]) {
+        if(tapTalkRooms[roomID] && Object.keys(tapTalkRooms[roomID].messages).length > 0) {
             objectKeyRoomListlength = Object.keys(tapTalkRooms[roomID].messages).length;
             getMinCreatedTimestamp =  tapTalkRooms[roomID].messages[Object.keys(tapTalkRooms[roomID].messages)[0]].created;
             lastUpdateTimestamp = tapTalkRooms[roomID].lastUpdated === 0 ? tapTalkRooms[roomID].messages[Object.keys(tapTalkRooms[roomID].messages)[objectKeyRoomListlength - 1]].created : tapTalkRooms[roomID].lastUpdated;
