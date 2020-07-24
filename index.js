@@ -1,4 +1,4 @@
-/* 01-07-2020 13:06 */
+/* 24-07-2020 12:30 v1.0.304 */
 
 var define, CryptoJS;
 var crypto = require('crypto');
@@ -760,25 +760,25 @@ exports.taptalk = {
 		tapListener.push(callback);
     },
 
-    checkErrorResponse : (response, callback = null) => {
+    checkErrorResponse : (response, callbackOnMethod = null, callbackAfterRefresh = null) => {
         if(response.status !== 200) {
             if(response.status === 401) {
                 if(response.error.code === "40104") {
-                    this.taptalk.refreshAccessToken(callback);
+                    this.taptalk.refreshAccessToken(callbackAfterRefresh);
                 }else {
                     refreshAccessTokenCallbackArray = [];
                                     
                     for(let i  in tapListener) {
-                        Object.keys(tapListener[i]).map((callback) => {
-                            if(callback === 'onTapTalkRefreshTokenExpired') {
-                                tapListener[i][callback]();
+                        Object.keys(tapListener[i]).map((_callback) => {
+                            if(_callback === 'onTapTalkRefreshTokenExpired') {
+                                tapListener[i][_callback]();
                             }
                         })
                     }
                 }
             }else {
-                if(callback !== null) {
-                    callback.onError(response.error.code, response.error.message)
+                if(callbackOnMethod !== null) {
+                    callbackOnMethod.onError(response.error.code, response.error.message)
                 }
             }
         }
@@ -822,7 +822,7 @@ exports.taptalk = {
                     // _this.connect(callback);
                     callback.onSuccess();
                 }else {
-                    _this.taptalk.checkErrorResponse(response, () => {
+                    _this.taptalk.checkErrorResponse(response, callback, () => {
                         _this.taptalk.testAccessToken(callback)
                     });
                 } 
@@ -1013,7 +1013,7 @@ exports.taptalk = {
 
                         callback.onSuccess('Successfully loaded latest user data');
                     }else {
-                        _this.taptalk.checkErrorResponse(response, () => {
+                        _this.taptalk.checkErrorResponse(response, callback, () => {
                             _this.taptalk.refreshActiveUser(callback)
                         });
                     }
@@ -1051,7 +1051,7 @@ exports.taptalk = {
 							}
 						})
                     }else {
-                        _this.taptalk.checkErrorResponse(response, () => {
+                        _this.taptalk.checkErrorResponse(response, callback, () => {
                             _this.taptalk.uploadUserPhoto(file, callback)
                         });
                     }
@@ -1313,7 +1313,7 @@ exports.tapCoreRoomListManager = {
 
                             callback.onSuccess(tapTalkRoomListHashmap);
 						}else {
-							_this.taptalk.checkErrorResponse(response, () => {
+							_this.taptalk.checkErrorResponse(response, callback, () => {
                                 _this.tapCoreRoomListManager.getRoomListAndRead(callback)
                             });
 						}
@@ -1362,7 +1362,7 @@ exports.tapCoreRoomListManager = {
 							callback.onSuccess(tapTalkRoomListHashmap);
 						}
 					}else {
-						_this.taptalk.checkErrorResponse(response, () => {
+						_this.taptalk.checkErrorResponse(response, callback, () => {
                             _this.tapCoreRoomListManager.getRoomNewAndUpdated(callback)
                         });
 					}
@@ -1415,7 +1415,7 @@ exports.tapCoreRoomListManager = {
                     if(response.error.code === "") {
                         callback.onSuccess(response.data);
                     }else {
-                        _this.taptalk.checkErrorResponse(response, () => {
+                        _this.taptalk.checkErrorResponse(response, callback, () => {
                             _this.tapCoreRoomListManager.getUserByIdFromApi(userId, callback)
                         });
                     }
@@ -1577,7 +1577,7 @@ exports.tapCoreChatRoomManager = {
 							callback.onSuccess(response.data.room);
 						}, 3000);
                     }else {
-                        _this.taptalk.checkErrorResponse(response, () => {
+                        _this.taptalk.checkErrorResponse(response, callback, () => {
                             _this.tapCoreChatRoomManager.createGroupChatRoom(groupName, participantList, callback)
                         });
                     }
@@ -1609,7 +1609,7 @@ exports.tapCoreChatRoomManager = {
                                     callback.onSuccess(response.data.room);
                                 }, 3000);
                             }else {
-                                _this.taptalk.checkErrorResponse(response, () => {
+                                _this.taptalk.checkErrorResponse(response, callback, () => {
                                     _this.tapCoreChatRoomManager.createGroupChatRoomWithPicture(groupName, participantList, imageUri, callback)
                                 });
                             }
@@ -1644,7 +1644,7 @@ exports.tapCoreChatRoomManager = {
                     if(response.error.code === "") {
                         callback.onSuccess(response.data.room);
                     }else {
-                        _this.taptalk.checkErrorResponse(response, () => {
+                        _this.taptalk.checkErrorResponse(response, callback, () => {
                             _this.tapCoreChatRoomManager.updateGroupPicture(groupId, imageUri, callback)
                         });
                     }
@@ -1668,7 +1668,7 @@ exports.tapCoreChatRoomManager = {
                     if(response.error.code === "") {
                         callback.onSuccess(response.data);
                     }else {
-                        _this.taptalk.checkErrorResponse(response, () => {
+                        _this.taptalk.checkErrorResponse(response, callback, () => {
                             _this.tapCoreChatRoomManager.getGroupChatRoom(groupId, callback)
                         });
                     }
@@ -1693,7 +1693,7 @@ exports.tapCoreChatRoomManager = {
                     if(response.error.code === "") {
                         callback.onSuccess(response.data);
                     }else {
-                        _this.taptalk.checkErrorResponse(response, () => {
+                        _this.taptalk.checkErrorResponse(response, callback, () => {
                             _this.tapCoreChatRoomManager.getRoomByXcID(xcRoomID, callback)
                         });
                     }
@@ -1721,7 +1721,7 @@ exports.tapCoreChatRoomManager = {
                     if(response.error.code === "") {
                         callback.onSuccess(response.data.room);
                     }else {
-                        _this.taptalk.checkErrorResponse(response, () => {
+                        _this.taptalk.checkErrorResponse(response, callback, () => {
                             _this.tapCoreChatRoomManager.updateGroupChatRoomDetails(groupId, groupName, callback)
                         });
                     }
@@ -1750,7 +1750,7 @@ exports.tapCoreChatRoomManager = {
                     if(response.error.code === "") {
                         callback.onSuccess("Delete group chat room successfully");
                     }else {
-                        _this.taptalk.checkErrorResponse(response, () => {
+                        _this.taptalk.checkErrorResponse(response, callback, () => {
                             _this.tapCoreChatRoomManager.deleteGroupChatRoom(roomId, callback)
                         });
                     }
@@ -1774,7 +1774,7 @@ exports.tapCoreChatRoomManager = {
                     if(response.error.code === "") {
                         callback.onSuccess(response.data.success, response.data.message);
                     }else {
-                        _this.taptalk.checkErrorResponse(response, () => {
+                        _this.taptalk.checkErrorResponse(response, callback, () => {
                             _this.tapCoreChatRoomManager.leaveGroupChatRoom(groupId, callback)
                         });
                     }
@@ -1803,7 +1803,7 @@ exports.tapCoreChatRoomManager = {
                     if(response.error.code === "") {
                         callback.onSuccess(response.data.room);
                     }else {
-                        _this.taptalk.checkErrorResponse(response, () => {
+                        _this.taptalk.checkErrorResponse(response, callback, () => {
                             _this.tapCoreChatRoomManager.addGroupChatMembers(groupId, userId, callback)
                         });
                     }
@@ -1832,7 +1832,7 @@ exports.tapCoreChatRoomManager = {
                     if(response.error.code === "") {
                         callback.onSuccess(response.data.room);
                     }else {
-                        _this.taptalk.checkErrorResponse(response, () => {
+                        _this.taptalk.checkErrorResponse(response, callback, () => {
                             _this.tapCoreChatRoomManager.removeGroupChatMembers(groupId, userId, callback)
                         });
                     }
@@ -1860,7 +1860,7 @@ exports.tapCoreChatRoomManager = {
                     if(response.error.code === "") {
                         callback.onSuccess(response.data.room);
                     }else {
-                        _this.taptalk.checkErrorResponse(response, () => {
+                        _this.taptalk.checkErrorResponse(response, callback, () => {
                             _this.tapCoreChatRoomManager.promoteGroupAdmins(groupId, userId, callback)
                         });
                     }
@@ -1889,7 +1889,7 @@ exports.tapCoreChatRoomManager = {
                     if(response.error.code === "") {
                         callback.onSuccess(response.data.room);
                     }else {
-                        _this.taptalk.checkErrorResponse(response, () => {
+                        _this.taptalk.checkErrorResponse(response, callback, () => {
                             _this.tapCoreChatRoomManager.demoteGroupAdmins(groupId, userId, callback)
                         });
                     }
@@ -1916,7 +1916,7 @@ exports.tapCoreChatRoomManager = {
 
                         callback.onSuccess(response);
                     }else {
-                        _this.taptalk.checkErrorResponse(response, () => {
+                        _this.taptalk.checkErrorResponse(response, callback, () => {
                             _this.tapCoreChatRoomManager.downloadMessageFile(message, callback)
                         });
                     }
@@ -2017,6 +2017,8 @@ exports.tapCoreMessageManager  = {
 			lastMessage: {},
 			unreadCount: 0
         }
+
+        let user = this.taptalk.getTaptalkActiveUser().userID;
         
         newRoomListHashmap.lastMessage = messageModel;
 		newRoomListHashmap.unreadCount = (!messageModel.isRead && user !== messageModel.user.userID) ? 1 : 0;
@@ -2198,7 +2200,7 @@ exports.tapCoreMessageManager  = {
 
                         generateBase64(response.data.fileID);
                     }else {
-                        _this.taptalk.checkErrorResponse(response, () => {
+                        _this.taptalk.checkErrorResponse(response, callback, () => {
                             _this.tapCoreMessageManager.uploadChatFile(data, callback)
                         });
                     }
@@ -2703,7 +2705,7 @@ exports.tapCoreMessageManager  = {
 								tapTalkRooms[roomID].hasMore = response.data.hasMore;
 								callback.onSuccess(tapTalkRooms[roomID].messages, response.data.hasMore);
 							}else {
-                                _this.taptalk.checkErrorResponse(response, () => {
+                                _this.taptalk.checkErrorResponse(response, callback, () => {
                                     _this.tapCoreMessageManager.getOlderMessagesBeforeTimestamp(roomID, numberOfItems, callback)
                                 });
 							}
@@ -2781,7 +2783,7 @@ exports.tapCoreMessageManager  = {
 
 							callback.onSuccess(tapTalkRooms[roomID].messages);
 						}else {
-							_this.taptalk.checkErrorResponse(response, () => {
+							_this.taptalk.checkErrorResponse(response, callback, () => {
                                 _this.tapCoreMessageManager.getNewerMessagesAfterTimestamp(roomID, callback)
                             });
 						}
@@ -2809,7 +2811,7 @@ exports.tapCoreMessageManager  = {
 
             doXMLHTTPRequest('POST', authenticationHeader, url, {messageIDs: message})
                 .then(function (response) {
-                    _this.taptalk.checkErrorResponse(response, () => {
+                    _this.taptalk.checkErrorResponse(response, callback, () => {
                         _this.tapCoreMessageManager.markMessageAsRead(message)
                     });
                 })
@@ -2829,7 +2831,7 @@ exports.tapCoreMessageManager  = {
 
             doXMLHTTPRequest('POST', authenticationHeader, url, {messageIDs: message})
                 .then(function (response) {
-                    _this.taptalk.checkErrorResponse(response, () => {
+                    _this.taptalk.checkErrorResponse(response, callback, () => {
                         _this.tapCoreMessageManager.markMessageAsDelivered(message)
                     });
                 })
@@ -2856,7 +2858,7 @@ exports.tapCoreMessageManager  = {
 				doXMLHTTPRequest('POST', authenticationHeader, url, data)
 					.then(function (response) {
                         if(response.status !== 200) {
-                            _this.taptalk.checkErrorResponse(response, () => {
+                            _this.taptalk.checkErrorResponse(response, callback, () => {
                                 _this.tapCoreMessageManager.markMessageAsDeleted(roomID, messages, forEveryone)
                             });
                         }else {
@@ -2889,7 +2891,7 @@ exports.tapCoreContactManager  = {
                         taptalkContact = response.data.contacts;
                         callback.onSuccess(taptalkContact);
                     }else {
-                        _this.taptalk.checkErrorResponse(response, () => {
+                        _this.taptalk.checkErrorResponse(response, callback, () => {
                             _this.tapCoreContactManager.getAllUserContacts(callback)
                         });
                     }
@@ -2933,7 +2935,7 @@ exports.tapCoreContactManager  = {
 
                         callback.onSuccess(response.data);
                     }else {
-                        _this.taptalk.checkErrorResponse(response, () => {
+                        _this.taptalk.checkErrorResponse(response, callback, () => {
                             _this.tapCoreContactManager.getUserDataWithUserID(userId, callback)
                         });
                     }
@@ -2958,7 +2960,7 @@ exports.tapCoreContactManager  = {
                     if(response.error.code === "") {
                         callback.onSuccess(response.data);
                     }else {
-                        _this.taptalk.checkErrorResponse(response, () => {
+                        _this.taptalk.checkErrorResponse(response, callback, () => {
                             _this.tapCoreContactManager.getUserDataWithXCUserID(xcUserId, callback)
                         });
                     }
@@ -2983,7 +2985,7 @@ exports.tapCoreContactManager  = {
                     if(response.error.code === "") {
                         callback.onSuccess(response.data.user);
                     }else {
-                        _this.taptalk.checkErrorResponse(response, () => {
+                        _this.taptalk.checkErrorResponse(response, callback, () => {
                             _this.tapCoreContactManager.addToTapTalkContactsWithUserID(userId, callback)
                         });
                     }
@@ -3007,7 +3009,7 @@ exports.tapCoreContactManager  = {
                     if(response.error.code === "") {
                         callback.onSuccess(response.data.users);
                     }else {
-                        _this.taptalk.checkErrorResponse(response, () => {
+                        _this.taptalk.checkErrorResponse(response, callback, () => {
                             _this.tapCoreContactManager.addToTapTalkContactsWithPhoneNumber(phoneNumber, callback)
                         });
                     }
@@ -3031,7 +3033,7 @@ exports.tapCoreContactManager  = {
                     if(response.error.code === "") {
                         callback.onSuccess(response.data);
                     }else {
-                        _this.taptalk.checkErrorResponse(response, () => {
+                        _this.taptalk.checkErrorResponse(response, callback, () => {
                             _this.tapCoreContactManager.getUserByUsername((username, ignoreCase, callback))
                         });
                     }
@@ -3056,7 +3058,7 @@ exports.tapCoreContactManager  = {
                     if(response.error.code === "") {
                         callback.onSuccess('Removed from contacts successfully');
                     }else {
-                        _this.taptalk.checkErrorResponse(response, () => {
+                        _this.taptalk.checkErrorResponse(response, callback, () => {
                             _this.tapCoreContactManager.removeFromTapTalkContacts(userId, callback)
                         });
                     }
