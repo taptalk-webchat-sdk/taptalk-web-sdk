@@ -1,4 +1,4 @@
-/* 24-07-2020 12:30 v1.0.304 */
+/* 24-07-2020 12:30  v1.0.305*/
 
 var define, CryptoJS;
 var crypto = require('crypto');
@@ -2811,7 +2811,7 @@ exports.tapCoreMessageManager  = {
 
             doXMLHTTPRequest('POST', authenticationHeader, url, {messageIDs: message})
                 .then(function (response) {
-                    _this.taptalk.checkErrorResponse(response, callback, () => {
+                    _this.taptalk.checkErrorResponse(response, null, () => {
                         _this.tapCoreMessageManager.markMessageAsRead(message)
                     });
                 })
@@ -2831,7 +2831,7 @@ exports.tapCoreMessageManager  = {
 
             doXMLHTTPRequest('POST', authenticationHeader, url, {messageIDs: message})
                 .then(function (response) {
-                    _this.taptalk.checkErrorResponse(response, callback, () => {
+                    _this.taptalk.checkErrorResponse(response, null, () => {
                         _this.tapCoreMessageManager.markMessageAsDelivered(message)
                     });
                 })
@@ -2858,7 +2858,7 @@ exports.tapCoreMessageManager  = {
 				doXMLHTTPRequest('POST', authenticationHeader, url, data)
 					.then(function (response) {
                         if(response.status !== 200) {
-                            _this.taptalk.checkErrorResponse(response, callback, () => {
+                            _this.taptalk.checkErrorResponse(response, null, () => {
                                 _this.tapCoreMessageManager.markMessageAsDeleted(roomID, messages, forEveryone)
                             });
                         }else {
