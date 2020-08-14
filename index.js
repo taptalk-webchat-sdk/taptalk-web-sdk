@@ -1,4 +1,4 @@
-/* 24-07-2020 13:53  v1.6.2*/
+/* 14-08-2020 18:10  v1.0.309*/
 
 var define, CryptoJS;
 var crypto = require('crypto');
@@ -352,9 +352,6 @@ function doXMLHTTPRequestUpload(method, header, url, data, onProgress) {
 		if (oEvent.lengthComputable) {
           var percentComplete = Math.round((oEvent.loaded / oEvent.total * 100) * 10) / 10;
           onProgress(percentComplete, oEvent.loaded);
-          if(percentComplete === 100) {
-              tapUplQueue.processNext();
-          }
 		}
 	}
 
@@ -2381,6 +2378,8 @@ exports.tapCoreMessageManager  = {
                                     
                                     tapEmitMsgQueue.pushEmitQueue(JSON.stringify(emitData));
                                 }
+
+                                tapUplQueue.processNext();
                             }
                         },
             
@@ -2533,6 +2532,8 @@ exports.tapCoreMessageManager  = {
                                 
                                 tapEmitMsgQueue.pushEmitQueue(JSON.stringify(emitData));
                             }
+
+                            tapUplQueue.processNext();
                         }
                     },
         
@@ -2645,6 +2646,8 @@ exports.tapCoreMessageManager  = {
                             
                             tapEmitMsgQueue.pushEmitQueue(JSON.stringify(emitData));
                         }
+
+                        tapUplQueue.processNext();
                     }
                 },
 
